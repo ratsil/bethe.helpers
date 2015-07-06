@@ -1,0 +1,46 @@
+﻿<ResourceDictionary 
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:controls.sl"
+        xmlns:controlsToolkit="clr-namespace:System.Windows.Controls;assembly=System.Windows.Controls.Toolkit"
+        >
+    <!-- ReducePanel -->
+    <Style TargetType="local:ReducePanel">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="Black" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate  TargetType="local:ReducePanel">
+                    <Border Background="#FF3A5B69" CornerRadius="12" Margin="6,0,0,0">
+                        <Border BorderBrush="LightBlue" Background="LightBlue" BorderThickness="1" CornerRadius="12" Margin="-6,-4,6,4">
+                            <StackPanel Orientation="Vertical">
+                                <controlsToolkit:DockPanel x:Name="_ui_dpHeader" LastChildFill="True" Margin="10,1,10,1">
+                                    <Button x:Name="_ui_btnOpenClose" controlsToolkit:DockPanel.Dock="Right" Width="24" Height="24" Opacity="0" />
+                                    <Rectangle x:Name="_ui_rectOpenClose" controlsToolkit:DockPanel.Dock="Right" Height="24" HorizontalAlignment="Left" Margin="0,0,0,0" Stroke="Black" StrokeThickness="0" VerticalAlignment="Top" Width="24" />
+                                    <TextBlock x:Name="_ui_txtTitle" controlsToolkit:DockPanel.Dock="Left" FontSize="16" FontWeight="Bold" Foreground="#FF456D89"/>
+                                </controlsToolkit:DockPanel>
+                                <Border x:Name="_ui_brdContent" BorderBrush="Transparent" Background="AliceBlue" BorderThickness="0" CornerRadius="12" Padding="5" Visibility="Collapsed">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <ContentControl Grid.Column="0" Grid.Row="0" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Cursor="{TemplateBinding Cursor}" HorizontalAlignment="{TemplateBinding HorizontalAlignment}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}" FontStretch="{TemplateBinding FontStretch}" Foreground="{TemplateBinding Foreground}" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

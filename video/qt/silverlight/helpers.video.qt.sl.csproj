@@ -1,0 +1,133 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>8.0.50727</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{272F82BE-9AC7-432F-A1A1-5E72012E4144}</ProjectGuid>
+    <ProjectTypeGuids>{A1591282-1198-4647-A2B1-27E5FF5F6F3B};{fae04ec0-301f-11d3-bf4b-00c04f79efbc}</ProjectTypeGuids>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>helpers.video.qt.sl</RootNamespace>
+    <AssemblyName>helpers.video.qt.sl</AssemblyName>
+    <TargetFrameworkIdentifier>Silverlight</TargetFrameworkIdentifier>
+    <TargetFrameworkVersion>v5.0</TargetFrameworkVersion>
+    <SilverlightVersion>$(TargetFrameworkVersion)</SilverlightVersion>
+    <SilverlightApplication>false</SilverlightApplication>
+    <ValidateXaml>true</ValidateXaml>
+    <ThrowErrorsInValidation>true</ThrowErrorsInValidation>
+    <SccProjectName>
+    </SccProjectName>
+    <SccLocalPath>
+    </SccLocalPath>
+    <SccAuxPath>
+    </SccAuxPath>
+    <SccProvider>
+    </SccProvider>
+  </PropertyGroup>
+  <!-- This property group is only here to support building this project using the 
+       MSBuild 3.5 toolset. In order to work correctly with this older toolset, it needs 
+       to set the TargetFrameworkVersion to v3.5 -->
+  <PropertyGroup Condition="'$(MSBuildToolsVersion)' == '3.5'">
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>\projects\!bin\$(SolutionName)\$(MSBuildProjectName)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>\projects\!obj\$(SolutionName)\$(MSBuildProjectName)\$(Configuration)\</IntermediateOutputPath>
+    <DefineConstants>DEBUG;TRACE;SILVERLIGHT</DefineConstants>
+    <NoStdLib>true</NoStdLib>
+    <NoConfig>true</NoConfig>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>\projects\!bin\$(SolutionName)\$(MSBuildProjectName)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>\projects\!obj\$(SolutionName)\$(MSBuildProjectName)\$(Configuration)\</IntermediateOutputPath>
+    <DefineConstants>TRACE;SILVERLIGHT</DefineConstants>
+    <NoStdLib>true</NoStdLib>
+    <NoConfig>true</NoConfig>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="System.Windows" />
+    <Reference Include="system" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Net" />
+    <Reference Include="System.Windows.Browser" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\general\atoms\Atom.cs">
+      <Link>atoms\Atom.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\Edit.cs">
+      <Link>atoms\Edit.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\FileTypeCompatibility.cs">
+      <Link>atoms\FileTypeCompatibility.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\Free.cs">
+      <Link>atoms\Free.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\MediaHeader.cs">
+      <Link>atoms\MediaHeader.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\Movie.cs">
+      <Link>atoms\Movie.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\MovieData.cs">
+      <Link>atoms\MovieData.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\MovieHeader.cs">
+      <Link>atoms\MovieHeader.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\Preview.cs">
+      <Link>atoms\Preview.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\QT.cs">
+      <Link>atoms\QT.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\QTContainer.cs">
+      <Link>atoms\QTContainer.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\Skip.cs">
+      <Link>atoms\Skip.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\Track.cs">
+      <Link>atoms\Track.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\TrackHeader.cs">
+      <Link>atoms\TrackHeader.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\UserData.cs">
+      <Link>atoms\UserData.cs</Link>
+    </Compile>
+    <Compile Include="..\general\atoms\Wide.cs">
+      <Link>atoms\Wide.cs</Link>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Silverlight\$(SilverlightVersion)\Microsoft.Silverlight.CSharp.targets" />
+  <ProjectExtensions>
+    <VisualStudio>
+      <FlavorProperties GUID="{A1591282-1198-4647-A2B1-27E5FF5F6F3B}">
+        <SilverlightProjectProperties />
+      </FlavorProperties>
+    </VisualStudio>
+  </ProjectExtensions>
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

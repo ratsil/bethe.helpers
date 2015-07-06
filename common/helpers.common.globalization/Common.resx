@@ -1,0 +1,537 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="sAvailiable" xml:space="preserve">
+    <value>Availiable</value>
+  </data>
+  <data name="sDelete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="sError" xml:space="preserve">
+    <value>error</value>
+  </data>
+  <data name="sErrorFile" xml:space="preserve">
+    <value>Cannot open file</value>
+  </data>
+  <data name="sErrorNoItemWithSuchID" xml:space="preserve">
+    <value>No item with such ID</value>
+  </data>
+  <data name="sErrorPermissions" xml:space="preserve">
+    <value>Sorry, but you are not allowed {0} {1}. If you believe that this prohibition is wrong, contact your system administrator</value>
+  </data>
+  <data name="sErrors" xml:space="preserve">
+    <value>Errors</value>
+  </data>
+  <data name="sErrorUnknown" xml:space="preserve">
+    <value>Unknown error</value>
+  </data>
+  <data name="sErrorWrongID" xml:space="preserve">
+    <value>Wrong ID</value>
+  </data>
+  <data name="sFilesUploading" xml:space="preserve">
+    <value>Files uploading</value>
+  </data>
+  <data name="sFri" xml:space="preserve">
+    <value>Fri</value>
+  </data>
+  <data name="sItemsDeleteConfirmation" xml:space="preserve">
+    <value>Are you sure that you want to delete these items?</value>
+  </data>
+  <data name="sMon" xml:space="preserve">
+    <value>Mon</value>
+  </data>
+  <data name="sName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="sNoItemsSelected" xml:space="preserve">
+    <value>No items selected</value>
+  </data>
+  <data name="sOk" xml:space="preserve">
+    <value>Ok</value>
+  </data>
+  <data name="sProperties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="sQty" xml:space="preserve">
+    <value>qty</value>
+  </data>
+  <data name="sQuantity" xml:space="preserve">
+    <value>Quantity</value>
+  </data>
+  <data name="sSat" xml:space="preserve">
+    <value>Sat</value>
+  </data>
+  <data name="sSave" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="sSearch" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="sSelected" xml:space="preserve">
+    <value>selected</value>
+  </data>
+  <data name="sSun" xml:space="preserve">
+    <value>SUN</value>
+  </data>
+  <data name="sThu" xml:space="preserve">
+    <value>Thu</value>
+  </data>
+  <data name="sToAdd" xml:space="preserve">
+    <value>To add</value>
+  </data>
+  <data name="sToDelete" xml:space="preserve">
+    <value>To delete</value>
+  </data>
+  <data name="sToModify" xml:space="preserve">
+    <value>To modify</value>
+  </data>
+  <data name="sTue" xml:space="preserve">
+    <value>TUE</value>
+  </data>
+  <data name="sVersion" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="sWarning" xml:space="preserve">
+    <value>warning</value>
+  </data>
+  <data name="sWeekLetter1" xml:space="preserve">
+    <value />
+  </data>
+  <data name="sWeekLetter2" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="sWeekLetter3" xml:space="preserve">
+    <value>E</value>
+  </data>
+  <data name="sWeekLetter4" xml:space="preserve">
+    <value>E</value>
+  </data>
+  <data name="sWeekLetter5" xml:space="preserve">
+    <value>K</value>
+  </data>
+  <data name="sWeekLetter6" xml:space="preserve">
+    <value />
+  </data>
+  <data name="sYouHaveToRefresh" xml:space="preserve">
+    <value>You have to refresh</value>
+  </data>
+  <data name="sAdd" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="sAnd" xml:space="preserve">
+    <value>And</value>
+  </data>
+  <data name="sApply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="sAttention" xml:space="preserve">
+    <value>Attention</value>
+  </data>
+  <data name="sAuthorization" xml:space="preserve">
+    <value>Authorization</value>
+  </data>
+  <data name="sBetween" xml:space="preserve">
+    <value>between</value>
+  </data>
+  <data name="sCanceled" xml:space="preserve">
+    <value>Canceled</value>
+  </data>
+  <data name="sSelect" xml:space="preserve">
+    <value>Select</value>
+  </data>
+  <data name="sSelect1" xml:space="preserve">
+    <value>Select</value>
+  </data>
+  <data name="sSelectFiles" xml:space="preserve">
+    <value>Select files</value>
+  </data>
+  <data name="sContains" xml:space="preserve">
+    <value>Contains</value>
+  </data>
+  <data name="sErrorAdd" xml:space="preserve">
+    <value>An error occurred while add</value>
+  </data>
+  <data name="sErrorDataReceive" xml:space="preserve">
+    <value>Data receive error</value>
+  </data>
+  <data name="sErrorDataSave" xml:space="preserve">
+    <value>Data save error</value>
+  </data>
+  <data name="sErrorDelete" xml:space="preserve">
+    <value>An error occurred while delete</value>
+  </data>
+  <data name="sErrorItemsAdd" xml:space="preserve">
+    <value>An error occurred while items add</value>
+  </data>
+  <data name="sErrorItemNameExists" xml:space="preserve">
+    <value>Item with such name already exists</value>
+  </data>
+  <data name="sErrorSave" xml:space="preserve">
+    <value>An error occurred while save</value>
+  </data>
+  <data name="sErrorTimeout" xml:space="preserve">
+    <value>Timeout. (target action did not happen in {0} minutes)</value>
+  </data>
+  <data name="sErrorUpdate" xml:space="preserve">
+    <value>An error occurred while update</value>
+  </data>
+  <data name="sErrorWrongFields" xml:space="preserve">
+    <value>Some fields have wrong data</value>
+  </data>
+  <data name="sExit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="sExport" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="sFile" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="sFilters" xml:space="preserve">
+    <value>Filters</value>
+  </data>
+  <data name="sIn" xml:space="preserve">
+    <value>In</value>
+  </data>
+  <data name="sInformation" xml:space="preserve">
+    <value>Information</value>
+  </data>
+  <data name="sNo" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="sNoSelection" xml:space="preserve">
+    <value>No selection</value>
+  </data>
+  <data name="sPress" xml:space="preserve">
+    <value>Press</value>
+  </data>
+  <data name="sProfile" xml:space="preserve">
+    <value>Profile</value>
+  </data>
+  <data name="sRename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="sRenaming" xml:space="preserve">
+    <value>Renaming</value>
+  </data>
+  <data name="sSaveAllChanges" xml:space="preserve">
+    <value>Save all changes</value>
+  </data>
+  <data name="sSeeTheLog" xml:space="preserve">
+    <value>See the log</value>
+  </data>
+  <data name="sUnknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="sWrongFilename" xml:space="preserve">
+    <value>Wrong file name</value>
+  </data>
+  <data name="sYes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="sAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="sBack" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="sPreview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="sCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="sSelectFile" xml:space="preserve">
+    <value>Select file</value>
+  </data>
+  <data name="sModifiedDate" xml:space="preserve">
+    <value>Modified date</value>
+  </data>
+  <data name="sDeleteSelected" xml:space="preserve">
+    <value>Delete selected</value>
+  </data>
+  <data name="sEnter" xml:space="preserve">
+    <value>Enter</value>
+  </data>
+  <data name="sFilename" xml:space="preserve">
+    <value>Filename</value>
+  </data>
+  <data name="sFrom" xml:space="preserve">
+    <value>from</value>
+  </data>
+  <data name="sImport" xml:space="preserve">
+    <value>Import</value>
+  </data>
+  <data name="sMissing" xml:space="preserve">
+    <value>Missing</value>
+  </data>
+  <data name="sNext" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="sNoActionsForThisItem" xml:space="preserve">
+    <value>No actions for this item</value>
+  </data>
+  <data name="sNodeIsMissing" xml:space="preserve">
+    <value>Node is missing</value>
+  </data>
+  <data name="sParent" xml:space="preserve">
+    <value>Parent</value>
+  </data>
+  <data name="sPassword" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="sRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="sShow" xml:space="preserve">
+    <value>Show</value>
+  </data>
+  <data name="sShowAll" xml:space="preserve">
+    <value>Show all</value>
+  </data>
+  <data name="sTasks" xml:space="preserve">
+    <value>Tasks</value>
+  </data>
+  <data name="sTheDayAfterTomorrow" xml:space="preserve">
+    <value>Tomorrow + 1</value>
+  </data>
+  <data name="sToday" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="sTomorrow" xml:space="preserve">
+    <value>Tomorrow</value>
+  </data>
+  <data name="sUpdate" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="sUsername" xml:space="preserve">
+    <value>Username</value>
+  </data>
+  <data name="sValue" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="sWrongCredentials" xml:space="preserve">
+    <value>Wrong credentials</value>
+  </data>
+  <data name="sYear" xml:space="preserve">
+    <value>Year</value>
+  </data>
+  <data name="sYesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+  <data name="sSpecifiedItemIsMissing" xml:space="preserve">
+    <value>Specified item is missing</value>
+  </data>
+  <data name="sSpecifiedItemIsWrong" xml:space="preserve">
+    <value>Specified item is wrong</value>
+  </data>
+  <data name="sThereAreNotAnyNodes" xml:space="preserve">
+    <value>There are not any nodes</value>
+  </data>
+  <data name="sUpto" xml:space="preserve">
+    <value>Up to</value>
+  </data>
+  <data name="sErrorFileNotFound" xml:space="preserve">
+    <value>File not found</value>
+  </data>
+  <data name="sWrongItem" xml:space="preserve">
+    <value>Wrong item</value>
+  </data>
+  <data name="sErrorConnection" xml:space="preserve">
+    <value>Connection error</value>
+  </data>
+  <data name="sErrorCurrentRequestWasCanceled" xml:space="preserve">
+    <value>Current request was canceled</value>
+  </data>
+  <data name="sPath" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="sStatus" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="sDetails" xml:space="preserve">
+    <value>Details</value>
+  </data>
+  <data name="sFileTimings" xml:space="preserve">
+    <value>File timings</value>
+  </data>
+  <data name="sHideDetails" xml:space="preserve">
+    <value>Hide details</value>
+  </data>
+  <data name="sShowDetails" xml:space="preserve">
+    <value>sShowDetails</value>
+  </data>
+  <data name="sOut" xml:space="preserve">
+    <value>Out</value>
+  </data>
+  <data name="sPause" xml:space="preserve">
+    <value>Pause</value>
+  </data>
+  <data name="sPeriod" xml:space="preserve">
+    <value>Period</value>
+  </data>
+  <data name="sRefreshTheList" xml:space="preserve">
+    <value>Refresh the list</value>
+  </data>
+  <data name="sText" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="sWed" xml:space="preserve">
+    <value>Wed</value>
+  </data>
+  <data name="sBrowse" xml:space="preserve">
+    <value>Browse</value>
+  </data>
+  <data name="sCopy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="sFiles" xml:space="preserve">
+    <value>Files</value>
+  </data>
+  <data name="sMove" xml:space="preserve">
+    <value>Move</value>
+  </data>
+  <data name="sNotApplicable" xml:space="preserve">
+    <value>Not applicable</value>
+  </data>
+  <data name="sSubject" xml:space="preserve">
+    <value>Subject</value>
+  </data>
+  <data name="sOther" xml:space="preserve">
+    <value>Other</value>
+  </data>
+  <data name="sDoYouWantToReplaceExistedFile" xml:space="preserve">
+    <value>File exists already! Do you want to overwrite it?</value>
+  </data>
+  <data name="sFolders" xml:space="preserve">
+    <value>Folders</value>
+  </data>
+  <data name="sMissing1" xml:space="preserve">
+    <value>Missing</value>
+  </data>
+  <data name="sPreferences" xml:space="preserve">
+    <value>Preferences</value>
+  </data>
+  <data name="sType" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="sFolder" xml:space="preserve">
+    <value>Folder</value>
+  </data>
+</root>

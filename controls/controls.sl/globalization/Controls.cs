@@ -1,0 +1,24 @@
+﻿using System;
+using System.Net;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Shapes;
+
+using g = globalization;
+
+namespace globalization.xaml
+{
+    public class Controls : Common
+    {
+        public Controls()
+        { }
+
+        private static g.Controls _cControls = new g.Controls();
+        public g.Controls cControls { get { return _cControls; } }
+    }
+}
