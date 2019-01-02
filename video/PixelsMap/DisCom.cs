@@ -1,44 +1,55 @@
-﻿using System;
+﻿//#define CUDATEST  //DNF merge like native cuda function
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
-
+using System.Runtime;
 using System.Threading;
 using System.Runtime.InteropServices;
 
 namespace helpers
 {
-    public class DisCom
+    public partial class DisCom
     {
         public enum Alpha : byte
-        {
-            normal = 0,
-            mask = 1,
-            none = 255
+        { // внимание! берется из префов! не переименовывать просто так
+            normal = 0, // не маска
+            mask = 1,  // альфирует (маскирует) только где у слоя нет альфы.
+			mask_invert = 2,   // альфирует везде, где у слоя альфа или где вообще нету слоя (Area). круто бывает использовать саму плашку для альфирования текста на плашке.
+            mask_all_upper = 3,  // то же, только альфирует все вышестоящие слои
+            mask_all_upper_invert = 4,   // то же, только альфирует все вышестоящие слои
+            none = 255,  // маска отключена (не работает)
         }
-		abstract public class Info
+        [Serializable]
+        abstract public class Info
 		{
 		}
+        [Serializable]
         public class MergeInfo : Info
         {
             public ushort nLayersQty;
             public int nBackgroundSize;
-            public int nBackgroundWidth;
+			public int nBackgroundWidth_4;
+			public int nBackgroundWidth;
 			public int nBackgroundHight;
 			public byte nBackgroundAlphaType;
 			public LayerInfo[] aLayerInfos;
+            public bool bLayer1CopyToBackground;
 
             private IntPtr _p;
             ~MergeInfo()
             {
-                try
-                {
+				try
+				{
                     Dispose();
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    (new Logger()).WriteError(ex);
+                }
             }
 
-            public void Dispose()
+			public void Dispose()
             {
                 Free();
                 aLayerInfos = null;
@@ -53,9 +64,9 @@ namespace helpers
             }
             public uint SizeGet()
             {
-                int nRetVal = sizeof(int) * 8;
+                int nRetVal = sizeof(int) * 6;  // *8
                 if (null != aLayerInfos)
-                    nRetVal += aLayerInfos.Length * ((sizeof(int) * 14) + sizeof(float)); //замена bool'ов и byte'ов на int'ы - дань bytealign'у
+                    nRetVal += aLayerInfos.Length * ((sizeof(int) * 17) + sizeof(float)); //замена bool'ов и byte'ов на int'ы - дань bytealign'у
                 return (uint)nRetVal;
             }
             static public implicit operator IntPtr(MergeInfo cMergeInfo)
@@ -66,48 +77,56 @@ namespace helpers
                 int nOffset = sizeof(int);
                 Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.nBackgroundSize);
                 nOffset += sizeof(int);
-                Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.nBackgroundWidth);
+                Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.nBackgroundWidth_4);
                 nOffset += sizeof(int);
                 Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)cMergeInfo.nBackgroundAlphaType);
 				nOffset += sizeof(int);
+				Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.nBackgroundHight);
+				nOffset += sizeof(int);
+				Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.nBackgroundWidth);
+				nOffset += sizeof(int);
 
-                if (null != cMergeInfo.aLayerInfos)
+				if (null != cMergeInfo.aLayerInfos)
                 {
                     for (int nIndx = 0; cMergeInfo.aLayerInfos.Length > nIndx; nIndx++)
                     {
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nWidthDiff);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropTopLineInBG);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nForegroundStart);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropBottomLineInBG);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nBackgroundStart);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropLeft_4);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nBackgroundStop);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nWidth_4);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropLeft);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropWidth_4);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropRight);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nLeft_4);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nWidth);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nTop);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nAlphaConstant);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)cMergeInfo.aLayerInfos[nIndx].nAlphaConstant);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropWidth);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nHalfDeltaPxX_4);
                         nOffset += sizeof(int);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nCropHeight);
-                        nOffset += sizeof(int);
-                        Marshal.Copy(new float[] { cMergeInfo.aLayerInfos[nIndx].nShiftPosition }, 0, cMergeInfo._p + nOffset, 1);
-                        nOffset += sizeof(float);
-                        Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)(cMergeInfo.aLayerInfos[nIndx].bShiftVertical ? 1 : 0));
+						Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nHalfDeltaPxY_4);
+						nOffset += sizeof(int);
+						Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)cMergeInfo.aLayerInfos[nIndx].nHalfPathShiftPositionByteX);
+						nOffset += sizeof(int);
+						Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)cMergeInfo.aLayerInfos[nIndx].nHalfPathShiftPositionByteY);
+						nOffset += sizeof(int);
+						Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)cMergeInfo.aLayerInfos[nIndx].nShiftPositionByteX);
+						nOffset += sizeof(int);
+                        Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)cMergeInfo.aLayerInfos[nIndx].nShiftPositionByteY);
                         nOffset += sizeof(int);
                         Marshal.WriteInt32(cMergeInfo._p + nOffset, (int)cMergeInfo.aLayerInfos[nIndx].nAlphaType);
                         nOffset += sizeof(int);
-						Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nOffsetLeft);
-						nOffset += sizeof(int);
 						Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nOffsetTop);
 						nOffset += sizeof(int);
-						Marshal.Copy(new float[] { cMergeInfo.aLayerInfos[nIndx].nShiftTotal }, 0, cMergeInfo._p + nOffset, 1);
+						Marshal.Copy(new float[] { cMergeInfo.aLayerInfos[nIndx].nShiftTotalX }, 0, cMergeInfo._p + nOffset, 1);
 						nOffset += sizeof(float);
-					}
+						Marshal.WriteInt32(cMergeInfo._p + nOffset, cMergeInfo.aLayerInfos[nIndx].nBytesQty);
+						nOffset += sizeof(int);
+                    }
                 }
                 return cMergeInfo._p;
             }
@@ -137,11 +156,14 @@ namespace helpers
 			}
 			~CompareInfo()
             {
-                try
-                {
-                    Dispose();
-                }
-                catch { }
+				//try
+				//{
+    //                Dispose();
+    //            }
+    //            catch (Exception ex)
+    //            {
+    //                (new Logger()).WriteError(ex);
+    //            }
             }
 
 			void Dispose()
@@ -149,41 +171,39 @@ namespace helpers
             }
         }
         [StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+        [Serializable]
         public class LayerInfo
         {
-            public int nWidthDiff;
-            public int nForegroundStart;
-            public int nBackgroundStart;
-            public int nBackgroundStop;
-            public int nCropLeft;
-            public int nCropRight;
-            public int nWidth;
-            public byte nAlphaConstant;
-            public int nCropWidth;
-            public int nCropHeight;
-            public float nShiftPosition;
-            public bool bShiftVertical;
-            public byte nAlphaType;
-			public int nOffsetLeft; 
+			public int nCropTopLineInBG;
+			public int nCropBottomLineInBG;
+			public int nCropLeft_4;
+			public int nWidth_4;
+			public byte nAlphaConstant;
+			public int nCropWidth_4;
+            public byte nShiftPositionByteX;
+			public byte nShiftPositionByteY;
+			//public bool bShiftVertical;
+			public byte nAlphaType;
+			//public int nOffsetLeft; 
 			public int nOffsetTop;
-			public float nShiftTotal;
-			public int nLeft;
+			public float nShiftTotalX;
+			public int nLeft_4;
 			public int nTop;
-		}
-		public class LineInfo
+			public int nHalfDeltaPxX_4;
+			public int nHalfDeltaPxY_4; 
+			public byte nHalfPathShiftPositionByteX;
+			public byte nHalfPathShiftPositionByteY;
+			public int nBytesQty;
+        }
+		public class LineLayerInfo
 		{
-			public class LineLayerInfo
-			{
-				public int nBGCropStart;
-				public int nFGCropStart;
-				public int nBGCropEnd;
-				public bool bRowUpper;
-				public bool bRowUnder;
-				public int nBgFgLinesDelta;
-				public int nFGLineBeginning;
-			}
-			public int nBGStart;
-			public LineLayerInfo[] aLineLayers;
+			public int nBGCropStartRed;
+			public int nFGCropStartRed;
+			public int nBGCropEndRed;
+			public bool bRowUpper;
+			public bool bRowUnder;
+			public int nBgFgLinesDelta;
+			public int nFGLineBeginningRed;
 		}
 		private enum Function
         {
@@ -191,27 +211,32 @@ namespace helpers
             Move
         }
         static private byte[, ,] _aAlphaMap;
-        static private ThreadBufferQueue<DisCom> _aqQueue = new ThreadBufferQueue<DisCom>(0, false);
+		static private byte[,] _aAlphaMap2;
+		static private byte[,] _aAlphaMap3;
+		static private ThreadBufferQueue<DisCom> _aqQueue = new ThreadBufferQueue<DisCom>(0, false);
         static private Thread _cThreadMain;
         static private Thread[] _aThreads;
         static private ManualResetEvent[] _aMREStart;
         static private ManualResetEvent[] _aMREDone;
         static private DisCom _cDisComProcessing;
-		static private Dictionary<DisCom, int> _aqTasks;
+		static private ulong _nThreadsQty;
+        static MergeInfo _cMergeInfo;
+        static private ulong _nJobIndx; // for profiling
+        private long _nJobsDone = 0; // for profiling
+        static public bool _bInited = false;
 
-
-		private Info _cInfo;
+        private Info _cInfo;
         private byte[][] _aLayers;
 		private ManualResetEvent _cMREDone;
-		private int[] aCropTopLineInBG;
-		private int[] aCropBottomLineInBG;
 		private int _nMaxTasksIndx;
+		private int _nTaskNumber;
+		private object oLock;
 
 		public DisCom()
 		{
-			if (null == _aAlphaMap)
-				Init();
+            PixelsMap.DisComInit();
 			_cMREDone = new ManualResetEvent(false);
+			oLock = new object();
 		}
 		~DisCom()
 		{
@@ -230,23 +255,21 @@ namespace helpers
 			_aLayers = null;
 			_cInfo = null;
 		}
-
-		static private int GetTask(DisCom cDC)
-		{
-			lock (cDC)
-			{
-				if (_aqTasks[cDC] < cDC._nMaxTasksIndx)
-					return _aqTasks[cDC]++;
-				else
-					return int.MaxValue;
-			}
-		}
-
-		static public void Init()
+        //static public void Init()
+        //{
+        //    Init(Environment.ProcessorCount / 2);
+        //}
+        
+        static public void Init(int nThreadsQty)
 		{
 			lock (_aqQueue)
 			{
-				if (null == _aAlphaMap)
+                if (_bInited)
+                    return;
+#if CUDATEST
+                (new Logger()).WriteError("MERGING CUDA TEST IS ON!!!");                
+#endif
+                if (null == _aAlphaMap)
 				{
 					_cDisComProcessing = null;
 					_aAlphaMap = new byte[byte.MaxValue - 1, byte.MaxValue + 1, byte.MaxValue + 1];
@@ -263,75 +286,152 @@ namespace helpers
 							}
 						}
 					}
-					int nThreadsQty = Environment.ProcessorCount * 2;   // DNF  *2
-					_aThreads = new Thread[nThreadsQty];
+					//nPixelAlpha = (byte)((float)nFGColorAlpha * nPixelAlpha / 255 + 0.5);
+					_aAlphaMap2 = new byte[byte.MaxValue - 1, byte.MaxValue - 1];
+					for (byte nFGColorAlpha = 1; 255 > nFGColorAlpha; nFGColorAlpha++)  // мможно использовать симметрию умножения, но х с ней пока
+					{
+						for (byte nPixelAlpha = 1; 255 > nPixelAlpha; nPixelAlpha++)
+						{
+							_aAlphaMap2[nFGColorAlpha - 1, nPixelAlpha - 1] = (byte)((float)nFGColorAlpha * nPixelAlpha / 255 + 0.5);
+						}
+					}
+					//nFGColorAlpha = (byte)(nFGColorAlpha * (1 - _cDisComProcessing._aLayers[nLayerIndx - 1][nMaskIndx] / 255f) + 0.5);
+					_aAlphaMap3 = new byte[byte.MaxValue, byte.MaxValue - 1];
+					for (ushort nFGColorAlpha = 1; 256 > nFGColorAlpha; nFGColorAlpha++)
+					{
+						for (byte nMask = 1; 255 > nMask; nMask++)
+						{
+							_aAlphaMap3[nFGColorAlpha - 1, nMask - 1] = (byte)(nFGColorAlpha * ((255 - nMask) / 255f) + 0.5);
+						}
+					}
+
+                    _nThreadsQty = (ulong)nThreadsQty;
+                    (new Logger()).WriteNotice("[threads=" + _nThreadsQty + "][ProcessorCount=" + Environment.ProcessorCount + "][pref_cout=" + PixelsMap.Preferences.nDisComThreadsQty + "]");
+
+                    _aThreads = new Thread[_nThreadsQty];
 					_cThreadMain = new Thread(new ThreadStart(WorkerMain));
 					_cThreadMain.IsBackground = true;
-					_cThreadMain.Priority = ThreadPriority.Highest;
+					_cThreadMain.Priority = ThreadPriority.AboveNormal;
 					_cThreadMain.Start();
 					Thread cThread = null;
-					_aqTasks = new Dictionary<DisCom, int>();
-					_aMREStart = new ManualResetEvent[nThreadsQty];
-					_aMREDone = new ManualResetEvent[nThreadsQty];
-					for (ushort nIndx = 0; nThreadsQty > nIndx; nIndx++)
+					_aMREStart = new ManualResetEvent[_nThreadsQty];
+					_aMREDone = new ManualResetEvent[_nThreadsQty];
+					for (ushort nIndx = 0; _nThreadsQty > nIndx; nIndx++)
 					{
 						_aMREStart[nIndx] = new ManualResetEvent(false);
 						_aMREDone[nIndx] = new ManualResetEvent(false);
-						cThread = new Thread(new ParameterizedThreadStart(Worker));
+						cThread = new Thread(new ParameterizedThreadStart(Worker)); //(new ParameterizedThreadStart(Worker));
 						_aThreads[nIndx] = cThread;
 						cThread.IsBackground = true;
-						cThread.Priority = ThreadPriority.Highest;
+						cThread.Priority = ThreadPriority.AboveNormal;
 						cThread.Start(nIndx);
 					}
 				}
-			}
-		}
-        public void FrameMerge(MergeInfo cMergeInfo, List<byte[]> aLayers)
-        {
-			_aqTasks.Add(this, 0);
-			_nMaxTasksIndx = cMergeInfo.nBackgroundHight;
-            aCropTopLineInBG = new int[cMergeInfo.aLayerInfos.Length];
-			aCropBottomLineInBG = new int[cMergeInfo.aLayerInfos.Length];
-			for (int nI = 0; nI < aCropTopLineInBG.Length; nI++)
-			{
-				aCropTopLineInBG[nI] = cMergeInfo.aLayerInfos[nI].nBackgroundStart / cMergeInfo.nBackgroundWidth;
-				aCropBottomLineInBG[nI] = aCropTopLineInBG[nI] + cMergeInfo.aLayerInfos[nI].nCropHeight - 1;
+                _bInited = true;
             }
-
+		}
+		public void FrameMerge(MergeInfo cMergeInfo, List<byte[]> aLayers, bool bEnqueueFirst)
+		{
+            _cMREDone.Reset();  // для многоразового юзания
+            _nMaxTasksIndx = cMergeInfo.nBackgroundHight;
+			_nTaskNumber = 0;
 			_cInfo = cMergeInfo;
-            _aLayers = aLayers.ToArray();
-            _aqQueue.Enqueue(this);
-			//(new Logger()).WriteDebug3("begin one [" + DateTime.Now.ToString("yyyy-MM-dd h:mm:ss.ms") + "]");
-			_cMREDone.WaitOne();
+			_aLayers = aLayers.ToArray();
+			lock (_aqQueue.oSyncRoot)  // что б вклинить таск из байтилуса - только он не конкурирует с пре-рендерами роллов и т.п.
+			{
+				if (bEnqueueFirst)
+					_aqQueue.EnqueueFirst(this);
+				else
+					_aqQueue.Enqueue(this);
+			}
+            //(new Logger()).WriteDebug3("begin one [" + DateTime.Now.ToString("yyyy-MM-dd h:mm:ss.ms") + "]");
 
-			_aqTasks.Remove(this);
+            _cMREDone.WaitOne();
         }
-		public void FrameCompare(CompareInfo cCompareInfo, byte[] aFrameBytes)
+        public void FrameCompare(CompareInfo cCompareInfo, byte[] aFrameBytes)
         {
 			_cInfo = cCompareInfo;
             //_aLayers = aLayers;
             //_aqQueue.Enqueue(this);
             //_cMREDone.WaitOne();
         }
-
-        static private void WorkerMain()
+		private int GetTask()
+		{
+			lock (oLock)
+			{
+				if (_nTaskNumber < _nMaxTasksIndx)
+					return _nTaskNumber++;
+				else
+					return int.MaxValue;
+			}
+		}
+		static private void WorkerMain()
         {
             try
-            {
-                //(new Logger()).WriteNotice("[id:" + GetHashCode() + ":" + nID + "][total:" + nThreadsTotalQty + "][start]");
+			{
+				_nJobIndx = 0;
+				int nCounter = 0;
+                (new Logger()).WriteNotice("main worker started");
+                //Logger.Timings cTimings = new helpers.Logger.Timings("discom:WorkerMain:profiling");
                 while (true)
                 {
-                    _cDisComProcessing = _aqQueue.Dequeue();
-                    _cDisComProcessing._cMREDone.Reset();
+                    _cDisComProcessing = _aqQueue.Dequeue(); //DNF
+                    if (_cDisComProcessing._cInfo is MergeInfo)
+                    {
+                        _cMergeInfo = (MergeInfo)_cDisComProcessing._cInfo;
+#if !CUDATEST
+                        if (_cMergeInfo.bLayer1CopyToBackground)
+                        {
+                            Array.Copy(_cDisComProcessing._aLayers[1], _cDisComProcessing._aLayers[0], _cDisComProcessing._aLayers[0].Length);
+                        }
+                        else
+                        {
+                            Array.Clear(_cDisComProcessing._aLayers[0], 0, _cDisComProcessing._aLayers[0].Length);
+                        }
+#endif
+                    }
+                    else
+                        _cMergeInfo = null;
+
+                    if (100 < nCounter++)
+                    {
+                        //cTimings.TotalRenew(); //profiling
+                        nCounter = 0;
+                        _nJobIndx = 1;
+                        //(new Logger()).WriteNotice("profiling begin [id:" + _cDisComProcessing.GetHashCode() + "][max_indx:" + _cDisComProcessing._nMaxTasksIndx + "][total_threads:" + _aMREDone.Length + "]");
+                    }
+                    else
+                        _nJobIndx = 0;
+
+
+
+
+                    //_cDisComProcessing._cMREDone.Reset();
                     foreach (ManualResetEvent cMRE in _aMREDone)
                         cMRE.Reset();
+
+                    //if (_nJobIndx == 1) //profiling
+                    //    cTimings.Restart("done reset");
+
                     foreach (ManualResetEvent cMRE in _aMREStart)
                         cMRE.Set();
+
+                    //if (_nJobIndx == 1) //profiling
+                    //    cTimings.Restart("start set");
+
                     for (int nIndx = 0; nIndx < _aMREDone.Length; nIndx += 64)
                         ManualResetEvent.WaitAll(_aMREDone.Skip(nIndx).Take(64).ToArray());
+
+
                     _cDisComProcessing._cMREDone.Set();
+
+
+                    //if (_nJobIndx == 1) //profiling
+                    //{
+                    //    (new Logger()).WriteNotice("profiling end [id:" + _cDisComProcessing.GetHashCode() + "][max_indx:" + _cDisComProcessing._nMaxTasksIndx + "][total_jobs_done = " + _cDisComProcessing._nJobsDone + "]");
+                    //    cTimings.Stop("merge done");
+                    //}
                 }
-                //(new Logger()).WriteNotice("[id:" + GetHashCode() + ":" + nID + "][total:" + nThreadsTotalQty + "][stop]");
             }
             catch (ThreadInterruptedException)
             {
@@ -348,81 +448,53 @@ namespace helpers
                 ushort nID = (ushort)cState;
 				ManualResetEvent cMREStart = _aMREStart[nID];
 				ManualResetEvent cMREDone = _aMREDone[nID];
-				int nLineToDo, nMax, nCount = 0, nCropWidth;
-				while (true)
+				int nLineToDo = 0, nCount = 0;
+                //Logger.Timings cTimings = new helpers.Logger.Timings("discom:Worker:profiling");
+
+                while (true)
 				{
 					try
 					{
 						cMREStart.Reset();
 						ManualResetEvent.SignalAndWait(cMREDone, cMREStart);
-						if (_cDisComProcessing._cInfo is MergeInfo)
-						{
-							MergeInfo cMergeInfo = (MergeInfo)_cDisComProcessing._cInfo;
+                        if (null != _cMergeInfo)
+                        {
 							nCount = 0;
+                            //if (_nJobIndx == 1) //profiling
+                            //    cTimings.TotalRenew();
 
-							//----Logger.Timings cTiming = new helpers.Logger.Timings("BTL:pixelmap:discom:");
+                            while ((nLineToDo = _cDisComProcessing.GetTask()) < int.MaxValue)
+                            {
+#if CUDATEST
+                                MergingCUDATest(nLineToDo);
+#else
+                                Merging(nLineToDo);
+#endif
 
-							while ((nLineToDo = GetTask(_cDisComProcessing)) < int.MaxValue)
-							{
-								LineInfo cLineInfo = new LineInfo();
-								cLineInfo.nBGStart = nLineToDo * cMergeInfo.nBackgroundWidth;    // nBGStart - если BG начинается с начала линии всегда - вроде тек и есть
-								cLineInfo.aLineLayers = new LineInfo.LineLayerInfo[cMergeInfo.aLayerInfos.Length];
-								for (int nI = 0; nI < cLineInfo.aLineLayers.Length; nI++)
-								{
-									cLineInfo.aLineLayers[nI] = new LineInfo.LineLayerInfo();
-                                    if (nLineToDo < _cDisComProcessing.aCropTopLineInBG[nI] || nLineToDo > _cDisComProcessing.aCropBottomLineInBG[nI])
-									{
-										cLineInfo.aLineLayers[nI].nBGCropStart = int.MaxValue;
-										cLineInfo.aLineLayers[nI].nBGCropEnd = int.MinValue;
-										cLineInfo.aLineLayers[nI].nFGCropStart = int.MaxValue;
-									}
-									else
-									{
-										cLineInfo.aLineLayers[nI].nBGCropStart = cLineInfo.nBGStart + cMergeInfo.aLayerInfos[nI].nCropLeft;
-										cLineInfo.aLineLayers[nI].nBGCropEnd = cLineInfo.aLineLayers[nI].nBGCropStart + cMergeInfo.aLayerInfos[nI].nCropWidth - 1;
-										//nCropWidth = cLineInfo.aLineLayers[nI].nBGCropEnd + 1 - cLineInfo.aLineLayers[nI].nBGCropStart;
+                                nCount++;
+
+                                //if (_nJobIndx == 1) //profiling
+                                //{
+                                //    cTimings.Restart("job=" + nLineToDo);
+                                //    System.Threading.Interlocked.Increment(ref _cDisComProcessing._nJobsDone);
+                                //}
+
+                            }
 
 
-										if (_cDisComProcessing.aCropTopLineInBG[nI] == 0)
-											cLineInfo.aLineLayers[nI].nFGCropStart = (nLineToDo - cMergeInfo.aLayerInfos[nI].nTop) * cMergeInfo.aLayerInfos[nI].nWidth;
-										else
-											cLineInfo.aLineLayers[nI].nFGCropStart = (nLineToDo - _cDisComProcessing.aCropTopLineInBG[nI]) * cMergeInfo.aLayerInfos[nI].nWidth;
-										if (cLineInfo.nBGStart < cLineInfo.aLineLayers[nI].nBGCropStart)
-										{
-											cLineInfo.aLineLayers[nI].nFGLineBeginning = cLineInfo.aLineLayers[nI].nFGCropStart;
-										}
-										else
-										{
-											cLineInfo.aLineLayers[nI].nFGCropStart -= cMergeInfo.aLayerInfos[nI].nLeft;
-											cLineInfo.aLineLayers[nI].nFGLineBeginning = ((int)((double)cLineInfo.aLineLayers[nI].nFGCropStart / cMergeInfo.aLayerInfos[nI].nWidth)) * cMergeInfo.aLayerInfos[nI].nWidth;
-										}
-										
-
-
-										if (nLineToDo - 1 >= _cDisComProcessing.aCropTopLineInBG[nI] && nLineToDo - 1 <= _cDisComProcessing.aCropBottomLineInBG[nI])
-											cLineInfo.aLineLayers[nI].bRowUpper = true;
-										if (nLineToDo + 1 >= _cDisComProcessing.aCropTopLineInBG[nI] && nLineToDo + 1 <= _cDisComProcessing.aCropBottomLineInBG[nI])
-											cLineInfo.aLineLayers[nI].bRowUnder = true;
-										cLineInfo.aLineLayers[nI].nBgFgLinesDelta = nLineToDo - _cDisComProcessing.aCropTopLineInBG[nI];
-										
-                                    }
-								}
-								for (int nI = cLineInfo.nBGStart; nI < cLineInfo.nBGStart + cMergeInfo.nBackgroundWidth; nI++)
-									Merging(nI, cLineInfo);
-								nCount++;
-							}
-
-							//-----cTiming.Stop("merged " + nID + "-th > 30 [count=" + nCount + "]", 40);
-						}
-					}
+                            //if (_nJobIndx == 1) //profiling
+                            //{
+                            //    cTimings.Stop("thread stopped [n=" + nID + "][id_parent:" + _cDisComProcessing.GetHashCode() + "][jobs_by_this_thread=" + nCount + "]");
+                            //}
+                        }
+                    }
 					catch (Exception ex)
 					{
 						if (ex is ThreadInterruptedException)
 							throw;
-						(new Logger()).WriteError(ex);
+						(new Logger()).WriteError("_cDisComProcessing = " + (_cDisComProcessing == null ? "null!!" : "not null") + "[count=" + nCount + "][line=" + nLineToDo + "][cInfo is null=" + (bool)(_cDisComProcessing._cInfo == null) + "][aLayers is null=" + (bool)(_cDisComProcessing._aLayers == null) + "]", ex);
 					}
 				}
-				//(new Logger()).WriteNotice("[id:" + GetHashCode() + ":" + nID + "][total:" + nThreadsTotalQty + "][stop]");
 			}
 			catch (Exception ex)
 			{
@@ -430,535 +502,5 @@ namespace helpers
                     (new Logger()).WriteError(ex);
             }
         }
-		static private void Merging(int nBGIndxPixel, LineInfo cLI)
-		{
-			MergeInfo cMergeInfo = (MergeInfo)_cDisComProcessing._cInfo;
-			if (nBGIndxPixel < cMergeInfo.nBackgroundSize)         //2-й - это размер BG, 3-й - ширина BG, 4-й - делать ли задник? 5-й - инфа про FG1; 
-			{                                   //Периодичность PRECOMPUTED_INFO_PERIOD - 1-й. 0-й - это количество слоёв
-				int M, nIndxIndent, nRow;
-				int nBGIndxRed, nBGIndxGreen, nBGIndxBlue, nBGIndxAlpha, nFGIndx;
-				byte nFGColorRed = 0, nFGColorGreen = 0, nFGColorBlue = 0, nFGColorAlpha = 0;
-				int nNextIndxRed, nNextIndxGreen, nNextIndxBlue, nNextIndxAlpha, nPixelAlphaIndx;
-				byte nPixelAlpha;
-				int nMaskIndx = -1;
-				LayerInfo cLayerInfo;
-				LineInfo.LineLayerInfo cLLI;
-
-				nBGIndxRed = nBGIndxPixel * 4;
-				nBGIndxGreen = nBGIndxRed + 1;
-				nBGIndxBlue = nBGIndxRed + 2;
-				nBGIndxAlpha = nBGIndxRed + 3;
-				_cDisComProcessing._aLayers[0][nBGIndxRed] = 0;
-				_cDisComProcessing._aLayers[0][nBGIndxGreen] = 0;
-				_cDisComProcessing._aLayers[0][nBGIndxBlue] = 0;
-				if (1 == cMergeInfo.nBackgroundAlphaType)
-					nMaskIndx = nBGIndxAlpha;
-				else
-					_cDisComProcessing._aLayers[0][nBGIndxAlpha] = cMergeInfo.nBackgroundAlphaType;
-
-
-				for (ushort nLayerIndx = 1; cMergeInfo.nLayersQty > nLayerIndx; nLayerIndx++)
-				{
-					cLayerInfo = cMergeInfo.aLayerInfos[(int)(nLayerIndx - 1)];
-					cLLI = cLI.aLineLayers[(int)(nLayerIndx - 1)];
-
-					if (nBGIndxPixel >= cLLI.nBGCropStart && nBGIndxPixel <= cLLI.nBGCropEnd)
-					{
-						nFGIndx = (nBGIndxPixel - cLLI.nBGCropStart + cLLI.nFGCropStart) * 4;
-
-						if (1 == cLayerInfo.nAlphaType) //леер является маской
-						{
-							if (_cDisComProcessing._aLayers[nLayerIndx].Length - 1 < (nMaskIndx = nFGIndx + 3))
-								nMaskIndx = -1;
-							continue;
-						}
-						nFGColorAlpha = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3];
-						if (-1 < nMaskIndx) //применяем маску
-						{
-							if (255 == _cDisComProcessing._aLayers[nLayerIndx - 1][nMaskIndx]) //отрезали пиксел по маске
-							{
-								nMaskIndx = -1;
-								continue;
-							}
-							else if (0 < _cDisComProcessing._aLayers[nLayerIndx - 1][nMaskIndx])
-								nFGColorAlpha = (byte)(nFGColorAlpha * (1 - _cDisComProcessing._aLayers[nLayerIndx - 1][nMaskIndx] / 255f) + 0.5);
-							nMaskIndx = -1;
-						}
-						nFGColorRed = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx];
-						nFGColorGreen = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1];
-						nFGColorBlue = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2];
-
-						if (0 == cLayerInfo.nAlphaType) // т.е. наш слой не альфирующий, а обычный слой с альфой RGBA
-						{
-							if (0 != cLayerInfo.nShiftPosition || 0 != cLayerInfo.nShiftTotal)// обработка расположения между пикселями. Берем инфу с того места откуда она приехала в этот пиксель
-							{
-								if (cLayerInfo.bShiftVertical)   // для вертикальных cLayerInfo.nShiftTotal == 0  
-								{
-									if (0 < cLayerInfo.nShiftPosition)
-									{
-										nPixelAlpha = nFGColorAlpha;
-										nFGColorAlpha = (byte)((nFGColorAlpha + 1) * (1 - cLayerInfo.nShiftPosition));
-										if (cLLI.bRowUnder)
-										{
-											nNextIndxRed = nFGIndx + (cLayerInfo.nWidth * 4);
-											nNextIndxGreen = nNextIndxRed + 1;
-											nNextIndxBlue = nNextIndxRed + 2;
-											nNextIndxAlpha = nNextIndxRed + 3;
-											if (0 < _cDisComProcessing._aLayers[nLayerIndx][nNextIndxAlpha])
-											{
-												if (0 < (nPixelAlpha = (byte)((_cDisComProcessing._aLayers[nLayerIndx][nNextIndxAlpha] + 1) * cLayerInfo.nShiftPosition)))
-												{
-													if (0 == nFGColorAlpha || 254 < nPixelAlpha)
-													{
-														nFGColorRed = _cDisComProcessing._aLayers[nLayerIndx][nNextIndxRed];
-														nFGColorGreen = _cDisComProcessing._aLayers[nLayerIndx][nNextIndxGreen];
-														nFGColorBlue = _cDisComProcessing._aLayers[nLayerIndx][nNextIndxBlue];
-													}
-													else
-													{
-														nPixelAlphaIndx = nPixelAlpha - 1;
-														nFGColorRed = _aAlphaMap[nPixelAlphaIndx, nFGColorRed, _cDisComProcessing._aLayers[nLayerIndx][nNextIndxRed]];
-														nFGColorGreen = _aAlphaMap[nPixelAlphaIndx, nFGColorGreen, _cDisComProcessing._aLayers[nLayerIndx][nNextIndxGreen]];
-														nFGColorBlue = _aAlphaMap[nPixelAlphaIndx, nFGColorBlue, _cDisComProcessing._aLayers[nLayerIndx][nNextIndxBlue]];
-													}
-												}
-												if (255 < nFGColorAlpha + nPixelAlpha)
-													nFGColorAlpha = 255;
-												else
-													nFGColorAlpha += nPixelAlpha;
-											}
-										}
-									}
-									else // тестовый элз - это если в роле не 1 - (....)   а просто - (.....)  в шифт идёт. тут другой способ.
-									{
-										if (cLLI.bRowUpper)
-										{
-											int nUpPxIndx = nFGIndx - (cLayerInfo.nWidth * 4);
-											nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx] * (-cLayerInfo.nShiftPosition));
-											nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx + 1] * (-cLayerInfo.nShiftPosition));
-											nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx + 2] * (-cLayerInfo.nShiftPosition));
-											nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx + 3] * (-cLayerInfo.nShiftPosition));
-										}
-										else
-										{
-											nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition));
-											nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition));
-											nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition));
-											nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition));
-										}
-									}
-								}
-								else  // движение горизонтальное
-								{
-									if (0 > cLayerInfo.nShiftPosition || 0 > cLayerInfo.nShiftTotal) // значит движение было влево (определяем по двум, т.к. могло попасть ровно пиксель в пиксель)
-									{
-										int nRowBeginingIndx = cLLI.nFGLineBeginning * 4;                
-										if (0 == ((cLLI.nBgFgLinesDelta + cLayerInfo.nOffsetTop) & 1))   // -----в dvPal это та по чётности строка, которая первой должна показывааться! Т.е. половина движения
-										{
-											double nHalf = (cLayerInfo.nShiftTotal / 2) + cLayerInfo.nShiftPosition;
-											int nDeltaPx = (int)nHalf;
-											double nNewShift = nHalf - nDeltaPx;
-
-											nFGIndx = nFGIndx + 4 * nDeltaPx;
-											int nLeftPxIndx = nFGIndx - 4;
-
-											if (nLeftPxIndx >= nRowBeginingIndx)
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx] * (-nNewShift));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 1] * (-nNewShift));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 2] * (-nNewShift));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 3] * (-nNewShift));
-											}
-											else if (nFGIndx >= nRowBeginingIndx)
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + nNewShift));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + nNewShift));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + nNewShift));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + nNewShift));
-											}
-										}
-										else   // -----в dvPal это та по чётности строка, которая второй должна показывааться! Т.е. целое движение
-										{   // берем инфу с двух соседних пикселей в пропорции шифта - с этого и с пикселя слева от этого. Т.к. был перелет из-за отбрасывания дробной части от X
-											//  this_pixel = this_pixel * (1+shift)  + left_pixel * (-shift)    тут   shift<0    |shift|<1
-											int nLeftPxIndx = nFGIndx - 4;
-											if (nLeftPxIndx >= nRowBeginingIndx) // левый пиксель ещё в нашей строке
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx] * (-cLayerInfo.nShiftPosition));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 1] * (-cLayerInfo.nShiftPosition));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 2] * (-cLayerInfo.nShiftPosition));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 3] * (-cLayerInfo.nShiftPosition));
-											}
-											else // если наш пиксель первый в строке - он просто "ослабнет"
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition));
-											}
-										}
-										//nColumn = nIndxIndent - cLayerInfo.nCropLeft;
-									}
-									else   // значит движение было вправо
-									{
-									}
-								}
-							}
-							nPixelAlpha = cLayerInfo.nAlphaConstant;
-
-							if (255 == nPixelAlpha)
-								nPixelAlpha = nFGColorAlpha;
-							else if (0 == nFGColorAlpha)
-								nPixelAlpha = 0;
-							else if (0 < nPixelAlpha && 255 > nFGColorAlpha) // объединение альфы слоя с константной альфой !!!!
-								nPixelAlpha = (byte)((float)nFGColorAlpha * nPixelAlpha / 255 + 0.5);
-						}
-						else
-							nPixelAlpha = 255;
-						if (0 < nPixelAlpha)
-						{
-							if (255 == nPixelAlpha || 0 == _cDisComProcessing._aLayers[0][nBGIndxAlpha])
-							{
-								_cDisComProcessing._aLayers[0][nBGIndxRed] = nFGColorRed;
-								_cDisComProcessing._aLayers[0][nBGIndxGreen] = nFGColorGreen;
-								_cDisComProcessing._aLayers[0][nBGIndxBlue] = nFGColorBlue;
-							}
-							else
-							{                           //индекс меньше, т.к. 0-е значение альфы мы не считаем и все индексы сдвинулись...
-								nPixelAlphaIndx = nPixelAlpha - 1;
-								_cDisComProcessing._aLayers[0][nBGIndxRed] = _aAlphaMap[nPixelAlphaIndx, _cDisComProcessing._aLayers[0][nBGIndxRed], nFGColorRed];
-								_cDisComProcessing._aLayers[0][nBGIndxGreen] = _aAlphaMap[nPixelAlphaIndx, _cDisComProcessing._aLayers[0][nBGIndxGreen], nFGColorGreen];
-								_cDisComProcessing._aLayers[0][nBGIndxBlue] = _aAlphaMap[nPixelAlphaIndx, _cDisComProcessing._aLayers[0][nBGIndxBlue], nFGColorBlue];
-							}
-							if (_cDisComProcessing._aLayers[0][nBGIndxAlpha] < nPixelAlpha)   // очередная попытка примирить альфу с действительностью ))
-								_cDisComProcessing._aLayers[0][nBGIndxAlpha] = nPixelAlpha;
-						}
-					}
-					else
-						nMaskIndx = -1;
-				}
-			}
-		}
-
-
-
-
-
-
-
-
-
-
-        static private void Merging(int nBGIndxPixel)
-		{
-			MergeInfo cMergeInfo = (MergeInfo)_cDisComProcessing._cInfo;
-			if (nBGIndxPixel < cMergeInfo.nBackgroundSize) //2-й - это размер BG, 3-й - ширина BG, 4-й - делать ли задник? 5-й - инфа про FG1; 
-			{									//Периодичность PRECOMPUTED_INFO_PERIOD - 1-й. 0-й - это количество слоёв
-				int M, nIndxIndent, nRow;
-				int nBGIndxRed, nBGIndxGreen, nBGIndxBlue, nBGIndxAlpha, nFGIndx;
-				byte nFGColorRed = 0, nFGColorGreen = 0, nFGColorBlue = 0, nFGColorAlpha = 0;
-				int nNextIndxRed, nNextIndxGreen, nNextIndxBlue, nNextIndxAlpha, nPixelAlphaIndx;
-                byte nPixelAlpha;
-                int nMaskIndx = -1;
-				LayerInfo cLayerInfo;
-
-				M = nBGIndxPixel / cMergeInfo.nBackgroundWidth; //M=(int)(BI/BW) т.е. с отбрасыванием дробной части. это полных строк над нами
-				nIndxIndent = nBGIndxPixel - M * cMergeInfo.nBackgroundWidth;
-				nBGIndxRed = nBGIndxPixel * 4;
-				nBGIndxGreen = nBGIndxRed + 1;
-				nBGIndxBlue = nBGIndxRed + 2;
-				nBGIndxAlpha = nBGIndxRed + 3;
-				_cDisComProcessing._aLayers[0][nBGIndxRed] = 0;
-				_cDisComProcessing._aLayers[0][nBGIndxGreen] = 0;
-				_cDisComProcessing._aLayers[0][nBGIndxBlue] = 0;
-                if(1 == cMergeInfo.nBackgroundAlphaType)
-                    nMaskIndx = nBGIndxAlpha;
-                else
-                    _cDisComProcessing._aLayers[0][nBGIndxAlpha] = cMergeInfo.nBackgroundAlphaType;
-
-                for (ushort nLayerIndx = 1; cMergeInfo.nLayersQty > nLayerIndx; nLayerIndx++)
-				{
-					cLayerInfo = cMergeInfo.aLayerInfos[(int)(nLayerIndx - 1)];
-					if ((nBGIndxPixel >= cLayerInfo.nBackgroundStart) && (nBGIndxPixel <= cLayerInfo.nBackgroundStop) && (nIndxIndent >= cLayerInfo.nCropLeft) && (nIndxIndent <= cLayerInfo.nCropRight))
-					{
-						nFGIndx = (nBGIndxPixel + M * cLayerInfo.nWidthDiff - cLayerInfo.nForegroundStart) * 4;
-						//формулу см. в методе Intersect.
-						if (1 == cLayerInfo.nAlphaType) //леер является маской
-						{
-							if (_cDisComProcessing._aLayers[nLayerIndx].Length - 1 < (nMaskIndx = nFGIndx + 3))
-								nMaskIndx = -1;
-							continue;
-						}
-						nFGColorAlpha = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3];
-						if (-1 < nMaskIndx) //применяем маску
-						{
-							if (255 == _cDisComProcessing._aLayers[nLayerIndx - 1][nMaskIndx]) //отрезали пиксел по маске
-							{
-								nMaskIndx = -1;
-								continue;
-							}
-							else if(0 < _cDisComProcessing._aLayers[nLayerIndx - 1][nMaskIndx])
-								nFGColorAlpha = (byte)(nFGColorAlpha * (1 - _cDisComProcessing._aLayers[nLayerIndx - 1][nMaskIndx] / 255f) + 0.5);
-							nMaskIndx = -1;
-						}
-						nFGColorRed = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx];
-						nFGColorGreen = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1];
-						nFGColorBlue = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2];
-
-						if (0 == cLayerInfo.nAlphaType) // т.е. наш слой не альфирующий, а обычный слой с альфой RGBA
-						{
-							if (0 != cLayerInfo.nShiftPosition || 0 != cLayerInfo.nShiftTotal)// обработка расположения между пикселями. Берем инфу с того места откуда она приехала в этот пиксель
-							{
-								if (cLayerInfo.bShiftVertical)   // для вертикальных cLayerInfo.nShiftTotal == 0  
-								{
-									if (0 < cLayerInfo.nShiftPosition)
-									{
-										nPixelAlpha = nFGColorAlpha;
-										nFGColorAlpha = (byte)((nFGColorAlpha + 1) * (1 - cLayerInfo.nShiftPosition));
-										nRow = M - (cLayerInfo.nBackgroundStart / cMergeInfo.nBackgroundWidth);
-										if (nRow < (cLayerInfo.nCropHeight - 1))
-										{
-											nNextIndxRed = nFGIndx + (cLayerInfo.nWidth * 4);
-											nNextIndxGreen = nNextIndxRed + 1;
-											nNextIndxBlue = nNextIndxRed + 2;
-											nNextIndxAlpha = nNextIndxRed + 3;
-											if (0 < _cDisComProcessing._aLayers[nLayerIndx][nNextIndxAlpha])
-											{
-												if (0 < (nPixelAlpha = (byte)((_cDisComProcessing._aLayers[nLayerIndx][nNextIndxAlpha] + 1) * cLayerInfo.nShiftPosition)))
-												{
-													if (0 == nFGColorAlpha || 254 < nPixelAlpha)
-													{
-														nFGColorRed = _cDisComProcessing._aLayers[nLayerIndx][nNextIndxRed];
-														nFGColorGreen = _cDisComProcessing._aLayers[nLayerIndx][nNextIndxGreen];
-														nFGColorBlue = _cDisComProcessing._aLayers[nLayerIndx][nNextIndxBlue];
-													}
-													else
-													{
-														nPixelAlphaIndx = nPixelAlpha - 1;
-														nFGColorRed = _aAlphaMap[nPixelAlphaIndx, nFGColorRed, _cDisComProcessing._aLayers[nLayerIndx][nNextIndxRed]];
-														nFGColorGreen = _aAlphaMap[nPixelAlphaIndx, nFGColorGreen, _cDisComProcessing._aLayers[nLayerIndx][nNextIndxGreen]];
-														nFGColorBlue = _aAlphaMap[nPixelAlphaIndx, nFGColorBlue, _cDisComProcessing._aLayers[nLayerIndx][nNextIndxBlue]];
-													}
-												}
-												if (255 < nFGColorAlpha + nPixelAlpha)
-													nFGColorAlpha = 255;
-												else
-													nFGColorAlpha += nPixelAlpha;
-											}
-										}
-									}
-									else // тестовый элз - это если в роле не 1 - (....)   а просто - (.....)  в шифт идёт. тут другой способ.
-									{
-										nRow = M - (cLayerInfo.nBackgroundStart / cMergeInfo.nBackgroundWidth);
-										if (nRow > 0)
-										{
-											int nUpPxIndx = nFGIndx - (cLayerInfo.nWidth * 4);
-											nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx] * (-cLayerInfo.nShiftPosition));
-											nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx + 1] * (-cLayerInfo.nShiftPosition));
-											nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx + 2] * (-cLayerInfo.nShiftPosition));
-											nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nUpPxIndx + 3] * (-cLayerInfo.nShiftPosition));
-										}
-										else
-										{
-											nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition));
-											nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition));
-											nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition));
-											nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition));
-										}
-									}
-								}
-								else  // движение горизонтальное
-								{
-									if (0 > cLayerInfo.nShiftPosition || 0 > cLayerInfo.nShiftTotal) // значит движение было влево (определяем по двум, т.к. могло попасть ровно пиксель в пиксель)
-									{
-										nRow = M - (cLayerInfo.nBackgroundStart / cMergeInfo.nBackgroundWidth);  //полных строк над нами - полных строк над кропом
-										int nRowBeginingIndx = ((int)((double)nFGIndx / 4 / cLayerInfo.nWidth)) * cLayerInfo.nWidth * 4;
-										if (0 == ((nRow + cLayerInfo.nOffsetTop) & 1))   // -----в dvPal это та по чётности строка, которая первой должна показывааться! Т.е. половина движения
-										{
-											double nHalf = (cLayerInfo.nShiftTotal / 2) + cLayerInfo.nShiftPosition;
-											int nDeltaPx = (int)nHalf;
-											double nNewShift = nHalf - nDeltaPx;
-
-											nFGIndx = nFGIndx + 4 * nDeltaPx;
-											int nLeftPxIndx = nFGIndx - 4;
-
-											if (nLeftPxIndx >= nRowBeginingIndx)
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx] * (-nNewShift));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 1] * (-nNewShift));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 2] * (-nNewShift));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + nNewShift) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 3] * (-nNewShift));
-											}
-											else if (nFGIndx >= nRowBeginingIndx)
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + nNewShift));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + nNewShift));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + nNewShift));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + nNewShift));
-											}
-										}
-										else   // -----в dvPal это та по чётности строка, которая второй должна показывааться! Т.е. целое движение
-										{	// берем инфу с двух соседних пикселей в пропорции шифта - с этого и с пикселя слева от этого. Т.к. был перелет из-за отбрасывания дробной части от X
-											//  this_pixel = this_pixel * (1+shift)  + left_pixel * (-shift)    тут   shift<0    |shift|<1
-											int nLeftPxIndx = nFGIndx - 4;
-											if (nLeftPxIndx >= nRowBeginingIndx) // левый пиксель ещё в нашей строке
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx] * (-cLayerInfo.nShiftPosition));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 1] * (-cLayerInfo.nShiftPosition));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 2] * (-cLayerInfo.nShiftPosition));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition) + _cDisComProcessing._aLayers[nLayerIndx][nLeftPxIndx + 3] * (-cLayerInfo.nShiftPosition));
-											}
-											else // если наш пиксель первый в строке - он просто "ослабнет"
-											{
-												nFGColorRed = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx] * (1 + cLayerInfo.nShiftPosition));
-												nFGColorGreen = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 1] * (1 + cLayerInfo.nShiftPosition));
-												nFGColorBlue = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 2] * (1 + cLayerInfo.nShiftPosition));
-												nFGColorAlpha = (byte)(_cDisComProcessing._aLayers[nLayerIndx][nFGIndx + 3] * (1 + cLayerInfo.nShiftPosition));
-											}
-										}
-										//nColumn = nIndxIndent - cLayerInfo.nCropLeft;
-									}
-									else   // значит движение было вправо
-									{
-									}
-								}
-							}
-							nPixelAlpha = cLayerInfo.nAlphaConstant;
-
-							if (255 == nPixelAlpha)
-								nPixelAlpha = nFGColorAlpha;
-							else if (0 == nFGColorAlpha)
-								nPixelAlpha = 0;
-							else if (0 < nPixelAlpha && 255 > nFGColorAlpha) // объединение альфы слоя с константной альфой !!!!
-								nPixelAlpha = (byte)((float)nFGColorAlpha * nPixelAlpha / 255 + 0.5);
-						}
-						else
-							nPixelAlpha = 255;
-						if (0 < nPixelAlpha)
-						{
-							if (255 == nPixelAlpha || 0 == _cDisComProcessing._aLayers[0][nBGIndxAlpha])
-							{
-								_cDisComProcessing._aLayers[0][nBGIndxRed] = nFGColorRed;
-								_cDisComProcessing._aLayers[0][nBGIndxGreen] = nFGColorGreen;
-								_cDisComProcessing._aLayers[0][nBGIndxBlue] = nFGColorBlue;
-							}
-							else
-							{							//индекс меньше, т.к. 0-е значение альфы мы не считаем и все индексы сдвинулись...
-								nPixelAlphaIndx = nPixelAlpha - 1;
-								_cDisComProcessing._aLayers[0][nBGIndxRed] = _aAlphaMap[nPixelAlphaIndx, _cDisComProcessing._aLayers[0][nBGIndxRed], nFGColorRed];
-								_cDisComProcessing._aLayers[0][nBGIndxGreen] = _aAlphaMap[nPixelAlphaIndx, _cDisComProcessing._aLayers[0][nBGIndxGreen], nFGColorGreen];
-								_cDisComProcessing._aLayers[0][nBGIndxBlue] = _aAlphaMap[nPixelAlphaIndx, _cDisComProcessing._aLayers[0][nBGIndxBlue], nFGColorBlue];
-							}
-							if (_cDisComProcessing._aLayers[0][nBGIndxAlpha] < nPixelAlpha)   // очередная попытка примирить альфу с действительностью ))
-								_cDisComProcessing._aLayers[0][nBGIndxAlpha] = nPixelAlpha;
-						}
-					}
-					else
-						nMaskIndx = -1;
-
-				}
-			}
-		}
-		//static private void Merging(int nBGIndxPixel)
-		//{
-		//    MergeInfo cMergeInfo = (MergeInfo)_cDisComProcessing._cInfo;
-		//    if (nBGIndxPixel < cMergeInfo.nBackgroundSize) //2-й - это размер BG, 3-й - ширина BG, 4-й - делать ли задник? 5-й - инфа про FG1; 
-		//    {									//Периодичность PRECOMPUTED_INFO_PERIOD - 1-й. 0-й - это количество слоёв
-		//        int M, nIndxIndent, nRow;
-		//        int nBGIndxRed, nFGIndx;
-		//        byte nFGColorRed = 0, nFGColorAlpha = 0;
-		//        int nNextIndxRed;
-		//        byte nPixelAlpha;
-		//        LayerInfo cLayerInfo;
-
-		//        M = nBGIndxPixel / cMergeInfo.nBackgroundWidth; //M=(int)(BI/BW) т.е. с отбрасыванием дробной части.
-		//        nIndxIndent = nBGIndxPixel - M * cMergeInfo.nBackgroundWidth;
-		//        nBGIndxRed = nBGIndxPixel;
-		//        _cDisComProcessing._aLayers[0][nBGIndxRed] = 0;
-
-		//        for (ushort nLayerIndx = 1; nLayerIndx < cMergeInfo.nLayersQty; nLayerIndx++)
-		//        {
-		//            cLayerInfo = cMergeInfo.aLayerInfos[(int)(nLayerIndx - 1)];
-
-		//            if ((nBGIndxPixel >= cLayerInfo.nBackgroundStart) && (nBGIndxPixel <= cLayerInfo.nBackgroundStop) && (nIndxIndent >= cLayerInfo.nCropLeft) && (nIndxIndent <= cLayerInfo.nCropRight))
-		//            {
-		//                nFGIndx = (nBGIndxPixel + M * cLayerInfo.nWidthDiff - cLayerInfo.nForegroundStart);
-		//                //формулу см. в методе Intersect.
-		//                nFGColorRed = _cDisComProcessing._aLayers[nLayerIndx][nFGIndx];
-		//                nFGColorAlpha = 255;
-
-		//                if (0 != cLayerInfo.nShiftPosition && 1 > cLayerInfo.nShiftPosition && -1 < cLayerInfo.nShiftPosition)
-		//                {
-		//                    if (cLayerInfo.bShiftVertical)
-		//                    {
-		//                        if (0 < cLayerInfo.nShiftPosition)
-		//                        {
-		//                            nPixelAlpha = nFGColorAlpha;
-		//                            nFGColorAlpha = (byte)((nFGColorAlpha) * (1 - cLayerInfo.nShiftPosition));  //nFGColorAlpha+1
-		//                            nRow = M - (cLayerInfo.nBackgroundStart / cMergeInfo.nBackgroundWidth);
-		//                            if (nRow < (cLayerInfo.nCropHeight - 1))
-		//                            {
-		//                                nNextIndxRed = nFGIndx + (cLayerInfo.nWidth);
-		//                                if (0 < 255)
-		//                                {
-		//                                    if (0 < (nPixelAlpha = (byte)((255) * cLayerInfo.nShiftPosition)))   //255+1
-		//                                    {
-		//                                        if (0 == nFGColorAlpha || 254 < nPixelAlpha)
-		//                                        {
-		//                                            nFGColorRed = _cDisComProcessing._aLayers[nLayerIndx][nNextIndxRed];
-		//                                        }
-		//                                        else
-		//                                        {
-		//                                            nFGColorRed = _aAlphaMap[nPixelAlpha - 1, nFGColorRed, _cDisComProcessing._aLayers[nLayerIndx][nNextIndxRed]];
-		//                                        }
-		//                                    }
-		//                                    if (255 < nFGColorAlpha + nPixelAlpha)
-		//                                        nFGColorAlpha = 255;
-		//                                    else
-		//                                        nFGColorAlpha += nPixelAlpha;
-		//                                }
-		//                            }
-		//                        }
-		//                        else
-		//                        {
-		//                        }
-		//                    }
-		//                    else
-		//                    {
-		//                        if (0 < cLayerInfo.nShiftPosition)
-		//                        {
-		//                            //nColumn = nIndxIndent - cLayerInfo.nCropLeft;
-		//                        }
-		//                        else
-		//                        {
-		//                        }
-		//                    }
-		//                }
-
-		//                nPixelAlpha = cLayerInfo.nAlphaConstant;
-
-		//                if (255 == nPixelAlpha)
-		//                    nPixelAlpha = nFGColorAlpha;
-		//                else if (0 == nFGColorAlpha)
-		//                    nPixelAlpha = 0;
-		//                else if (0 < nPixelAlpha && 255 > nFGColorAlpha)                        // объединение альфы слоя с константной альфой !!!!
-		//                    nPixelAlpha = (byte)((float)nFGColorAlpha * nPixelAlpha / 255 + 0.5);
-
-		//                if (0 < nPixelAlpha)
-		//                {
-		//                    if (255 == nPixelAlpha || 0 == 255)
-		//                    {
-		//                        _cDisComProcessing._aLayers[0][nBGIndxRed] = nFGColorRed;
-		//                    }
-		//                    else
-		//                    {							//индекс меньше, т.к. 0-е значение альфы мы не считаем и все индексы сдвинулись...
-		//                        _cDisComProcessing._aLayers[0][nBGIndxRed] = _aAlphaMap[nPixelAlpha - 1, _cDisComProcessing._aLayers[0][nBGIndxRed], nFGColorRed];
-		//                    }
-		//                }
-		//            }
-
-		//        }
-		//    }
-		//}
-		//1b
-    }
+	}
 }

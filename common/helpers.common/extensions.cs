@@ -32,7 +32,11 @@ namespace helpers.extensions
 		{
 			return ToFramesString(nFrames, bFramesShow, bInclude, bMinutePadding, bHours, false);
 		}
-		static public string ToFramesString(this long nFrames, bool bFramesShow, bool bInclude, bool bMinutePadding, bool bHours, bool bRoundFrames)
+        static public string ToFramesString(this long nFrames, bool bFramesShow, bool bInclude, bool bMinutePadding, bool bHours, bool bRoundFrames)
+        {
+            return ToFramesString(nFrames, bFramesShow, bInclude, bMinutePadding, bHours, bRoundFrames, true);
+        }
+        static public string ToFramesString(this long nFrames, bool bFramesShow, bool bInclude, bool bMinutePadding, bool bHours, bool bRoundFrames, bool bSpaceBeforeDot)
 		{
 			string sRetVal = "";
 			if (bInclude)
@@ -54,8 +58,8 @@ namespace helpers.extensions
 			{
 				if (10 > nFramesRemainder)
 					sCharFrame = "0";
-				sRetVal = " ." + sCharFrame + nFramesRemainder.ToString();
-			}
+                sRetVal = (bSpaceBeforeDot ? " " : "") + "." + sCharFrame + nFramesRemainder.ToString();
+            }
 			else
 			{
 				if (12 < nFramesRemainder && bRoundFrames)
@@ -254,7 +258,13 @@ namespace helpers.extensions
 				{
 					if(oValue is byte[])
 						nRetVal = ((byte[])oValue).ToDouble(0, false);
-					else
+                    else if (oValue is string)
+                    {
+                        string sValue = (string)oValue;
+                        sValue = sValue.Replace(".", ",");
+                        nRetVal = Convert.ToDouble(sValue);
+                    }
+                    else
 						nRetVal = Convert.ToDouble(oValue, iFormatProvider);
 				}
 				catch { }
@@ -320,17 +330,37 @@ namespace helpers.extensions
 			catch { }
 			return false;
 		}
-		static public string ToStr(this object cValue)
+        static public string ToStr(this object cValue)
+        {
+            return cValue.ToStr(false);
+        }
+        static public string ToStr(this object cValue, bool bMiliseconds)
 		{
 			if (null == cValue)
 				return null;
 			if (cValue is DateTime)
-				return ((DateTime)cValue).ToString("yyyy-MM-dd HH:mm:ss.ff");
-			//return ((DateTime)cValue).Subtract(TimeSpan.FromHours(3)).ToString("yyyy-MM-dd HH:mm:ss.ff");
-			return cValue.ToString();
+                return ((DateTime)cValue).ToString("yyyy-MM-dd HH:mm:ss" + (bMiliseconds ? ".ff" : ""));
+            //return ((DateTime)cValue).Subtract(TimeSpan.FromHours(3)).ToString("yyyy-MM-dd HH:mm:ss.ff");
+            return cValue.ToString();
 		}
-
-        static public byte[] Reverse(this byte[] aBytes, int nOffset, int nQty)
+#if !SILVERLIGHT
+		static public string ToStr(this System.Xml.XmlNode cNode, int indentation)
+		{
+			if (null == cNode)
+				return null;
+			using (var sw = new System.IO.StringWriter())
+			{
+				using (var xw = new System.Xml.XmlTextWriter(sw))
+				{
+					xw.Formatting = System.Xml.Formatting.Indented;
+					xw.Indentation = indentation;
+					cNode.WriteContentTo(xw);
+				}
+				return sw.ToString();
+			}
+		}
+#endif
+		static public byte[] Reverse(this byte[] aBytes, int nOffset, int nQty)
         {
             IEnumerable<byte> iBytes = aBytes;
             if(0 < nOffset)
@@ -540,7 +570,9 @@ namespace helpers.extensions
 				}
 				catch
 				{
-					if (cValue.GetType().IsEnum)
+                    if (null == cValue)
+                        cValue = 0;
+					else if (cValue.GetType().IsEnum)
 						cValue = ((Enum)cValue).Translate(t); //теоретически мы сюда никогда не должны попасть... т.к. в этом случае будет выбран: static public TEnum To<TEnum>(this Enum eValue)
 					else
 						cValue = cValue.Translate(t);
@@ -564,6 +596,8 @@ namespace helpers.extensions
                 cValue = cValue.ToBool();
             else if (t == typeof(float))
                 cValue = cValue.ToFloat();
+            else if (t == typeof(double))
+                cValue = cValue.ToDouble();
             else if (t == typeof(string))
 				cValue = cValue.ToStr();
 			else if (t == typeof(DateTime))
@@ -583,7 +617,38 @@ namespace helpers.extensions
 				eRetVal = (TEnum)eValue.Translate(typeof(TEnum));
 			return eRetVal;
 		}
-		static private object Translate(this Enum eValue, Type tEnumTarget)
+        static public TEnum ToEnumContainingString<TEnum>(this string sValue, TEnum eDefaultValue, out bool bFound) where TEnum: struct, IConvertible
+        {
+            if (typeof(TEnum).IsEnum)
+            {
+                TEnum eRetVal = eDefaultValue;
+                sValue = sValue.ToLower();
+                bFound = false;
+                if (eRetVal.ToString().ToLower().Contains(sValue))
+                    bFound = true;
+
+                foreach (TEnum ePF in Enum.GetValues(typeof(TEnum)))
+                {
+                    if (ePF.ToString().ToLower().Contains(sValue))
+                    {
+                        if (eRetVal.ToString() != ePF.ToString())
+                        {
+                            if (bFound)
+                            {
+                                bFound = false;
+                                break;
+                            }
+                            eRetVal = ePF;
+                            bFound = true;
+                        }
+                    }
+                }
+                return eRetVal;
+            }
+            throw new Exception("type is not enum");
+        }
+
+        static private object Translate(this Enum eValue, Type tEnumTarget)
 		{
 			Enum eTarget = (Enum)Enum.GetValues(tEnumTarget).GetValue(0);
 			decimal nSource = eValue.Max();
@@ -763,12 +828,10 @@ namespace helpers.extensions
         {
             return System.IO.Path.GetFullPath(sPath).Replace("\\", "/").TrimEnd('/');
         }
+        #endregion
 
-
-		#endregion
-
-		#region escapes
-		static public string ForXML(this string sText)
+        #region escapes
+        static public string ForXML(this string sText)
 		{
 			sText = sText.Replace("&", "&amp;");
 			sText = sText.Replace("<", "&lt;");
@@ -793,7 +856,12 @@ namespace helpers.extensions
 		}
 		static public string ForDB(this string sText)
 		{
-			return sText.Replace("\\", "\\134").Replace("'", "\\047");
+			//return sText.Replace("\\", "\\134").Replace("'", "\\047");
+            return sText.Replace("'", "''");
+        }
+		static public string FromDB(this string sText)
+		{
+            return sText.Replace("\\134", "\\").Replace("\\047", "'");
 		}
 		static public string ForHTML(this string sText)
 		{
@@ -837,7 +905,7 @@ namespace helpers.extensions
 		{
 			return (a == null || a.Length == 0);
 		}
-		public static bool IsNullOrEmpty(this System.Collections.ICollection a)
+        public static bool IsNullOrEmpty(this System.Collections.ICollection a)
 		{
 			return (a == null || a.Count == 0);
 		}
@@ -849,16 +917,22 @@ namespace helpers.extensions
 		{
             return (DateTime.MaxValue == dt || DateTime.MinValue == dt);
 		}
-		#endregion
+        #endregion
 
 #if !SILVERLIGHT
+        #region checks
+        public static bool IsNullOrEmpty(this Bytes a)
+        {
+            return (a == null || a.Length == 0);
+        }
+        #endregion
         #region xml
         static public XmlNode NodeGet(this XmlNode cParent, string sName, bool bThrow)
         {
             XmlNode cRetVal;
             if (null == (cRetVal = cParent.SelectSingleNode(sName)) && bThrow)
             {
-                string sDetails = "[" + sName + "][" + cParent.Name + "]";
+                string sDetails = "[" + cParent.Name + "][" + sName + "]";
                 throw new Exception("node is missing " + sDetails, new CultureNotFoundException("sNodeIsMissing", sDetails));
             }
             return cRetVal;
@@ -874,7 +948,7 @@ namespace helpers.extensions
             XmlNodeList cRetVal;
             if ((null == (cRetVal = cParent.SelectNodes(sName)) || 1 > cRetVal.Count) && bThrow)
             {
-                string sDetails = "[" + sName + "][" + cParent.Name + "]";
+                string sDetails = "[" + cParent.Name + "][" + sName + "]";
                 throw new Exception("there are not any nodes " + sDetails, new CultureNotFoundException("sThereAreNotAnyNodes", sDetails));
             }
             return (null == cRetVal ? null : cRetVal.Cast<XmlNode>().ToArray());
@@ -887,8 +961,19 @@ namespace helpers.extensions
         {
             return (null == cParent.ChildNodes ? null : cParent.ChildNodes.Cast<XmlNode>().ToArray());
         }
-
-        static public T AttributeGet<T>(this XmlNode cParent, string sName, bool bThrow)
+        static public T AttributeOrDefaultGet<T>(this XmlNode cParent, string[] aSynonymNames, T tDefaultValue)
+        {
+            if (aSynonymNames != null)
+                foreach (string sName in aSynonymNames)
+                    if (null != cParent.AttributeValueGet(sName, false))
+                        return cParent.AttributeGet<T>(sName, false);
+            return tDefaultValue;
+        }
+        static public T AttributeOrDefaultGet<T>(this XmlNode cParent, string sName, T cDefaultValue)
+		{
+			return null == cParent.AttributeValueGet(sName, false) ? cDefaultValue : cParent.AttributeGet<T>(sName, false);
+		}
+		static private T AttributeGet<T>(this XmlNode cParent, string sName, bool bThrow)
         {
             T tRetVal;
             string sValue = cParent.AttributeValueGet(sName, bThrow);
@@ -898,7 +983,7 @@ namespace helpers.extensions
             }
             catch
             {
-                string sDetails = "[" + sName + ":" + sValue + "][" + cParent.Name + "]";
+                string sDetails = "[" + cParent.Name + "][" + sName + ":" + sValue + "]";
                 throw new Exception("specified item is wrong " + sDetails, new CultureNotFoundException("sSpecifiedItemIsWrong", sDetails));
             }
             return tRetVal;
@@ -907,7 +992,6 @@ namespace helpers.extensions
         {
             return cParent.AttributeGet<T>(sName, true);
         }
-
 		static public string AttributeValueGet(this XmlNode cParent, string sName, bool bThrow)
 		{
 			return cParent.AttributeValueGet(sName, bThrow, false);
@@ -927,7 +1011,7 @@ namespace helpers.extensions
 			}
             else if (bThrow)
             {
-                string sDetails = "[" + sName + "][" + cParent.Name + "]";
+                string sDetails = "[" + cParent.Name + "][" + sName + "]";
                 throw new Exception("specified item is missing " + sDetails, new CultureNotFoundException("sSpecifiedItemIsMissing", sDetails));
             }
             return sRetVal;
@@ -946,7 +1030,7 @@ namespace helpers.extensions
             }
             catch
             {
-                string sDetails = "[" + sName + ":" + sValue + "][" + cParent.Name + "]";
+                string sDetails = "[" + cParent.Name + "][" + sName + ":" + sValue + "]";
                 throw new Exception("specified item is wrong " + sDetails, new CultureNotFoundException("sSpecifiedItemIsWrong", sDetails));
             }
             return nRetVal;
@@ -1019,11 +1103,120 @@ namespace helpers.extensions
             return sValue.Remove("\r").Replace("\n", Environment.NewLine);
         }
 
-		public static IEnumerable<T> ForEach<T>(this IEnumerable<T> source, Action<T> selector)
+        public static string ToUpperFirstLetterEveryWord(this string sText, bool bIncludePrepositions)
+        {
+            if (sText.IsNullOrEmpty())
+                return sText;
+
+            string[] aWords = sText.Split(' ');
+            string sTmp;
+            sText = "";
+            foreach (string sWord in aWords)
+            {
+                if (sWord.Length == 0 || sWord == " ")
+                    continue;
+                if (sWord.Length > 1 || !bIncludePrepositions)
+                    sTmp = sWord.Substring(0, 1).ToUpper() + sWord.Substring(1);
+                else
+                    sTmp = sWord;
+
+                if (sText.Length > 0)
+                    sText += " ";
+                sText += sTmp;
+            }
+            return sText;
+        }
+        public static IEnumerable<T> ForEach<T>(this IEnumerable<T> source, Action<T> selector)
+        {
+            foreach (T o in source)
+                selector(o);
+            return source;
+        }
+        public static string ToEnumerationString(this IEnumerable<string> aA, string sRoundingChars, string sReplace1, string sReplace2, bool bUnique)
 		{
-			foreach (T o in source)
-				selector(o);
-			return source;
+			return ToEnumerationString(aA, ",", sRoundingChars, sReplace1, sReplace2, bUnique);
 		}
+		public static string ToEnumerationString(this IEnumerable<string> aA, string sSeparator, string sRoundingChars, bool bUnique)
+		{
+			return ToEnumerationString(aA, sSeparator, sRoundingChars, null, null, bUnique);
+		}
+        public static string ToEnumerationString(this IEnumerable<string> aA, string sRoundingChars, bool bUnique)
+        {
+            return ToEnumerationString(aA, sRoundingChars, null, null, bUnique);
+        }
+        public static string ToEnumerationString(this IEnumerable<string> aA, bool bUnique)
+        {
+            return ToEnumerationString(aA, "", null, null, bUnique);
+        }
+        public static string ToEnumerationString(this IEnumerable<string> aA, string sSeparator, string sRoundingChars, string sWhatReplace, string sByWhatReplace, bool bUnique)
+		{
+			List<string> aUnique = null;
+			if (bUnique)
+				aUnique = new List<string>();
+			string sRetVal = "";
+			foreach (string sF in aA)
+			{
+				if (bUnique)
+				{
+					if (aUnique.Contains(sF))
+						continue;
+					aUnique.Add(sF);
+				}
+				if (sRetVal.Length > 0)
+					sRetVal += sSeparator;
+				if (null == sWhatReplace || null == sByWhatReplace)
+					sRetVal += sRoundingChars + sF + sRoundingChars;
+				else
+					sRetVal += sRoundingChars + sF.Replace(sWhatReplace, sByWhatReplace) + sRoundingChars;
+			}
+			return sRetVal;
+		}
+		public static string ToEnumerationString<T>(this IEnumerable<T> aA, string sSeparator, string sRoundingChars, string sWhatReplace, string sByWhatReplace, bool bUnique)
+		{
+			return aA.Select(o => o.ToString()).ToEnumerationString(sSeparator, sRoundingChars, sWhatReplace, sByWhatReplace, bUnique);
+		}
+        public static string ToEnumerationString<T>(this IEnumerable<T> aA, string sRoundingChars, string sWhatReplace, string sByWhatReplace, bool bUnique)
+        {
+            return aA.ToEnumerationString(",", sRoundingChars, sWhatReplace, sByWhatReplace, bUnique);
+        }
+        public static string ToEnumerationString<T>(this IEnumerable<T> aA, string sRoundingChars, bool bUnique)
+        {
+            return aA.ToEnumerationString(sRoundingChars, null, null, bUnique);
+        }
+        public static string ToEnumerationString<T>(this IEnumerable<T> aA, bool bUnique)
+        {
+            return aA.ToEnumerationString("", null, null, bUnique);
+        }
+
+        public static DateTime ModificationCreationDateLast(this sio.FileInfo cFI)
+		{
+			if (cFI.CreationTime > cFI.LastWriteTime)
+				return cFI.CreationTime;
+			else
+				return cFI.LastWriteTime;
+		}
+
+        public static Dictionary<TK, TV> CopyDictionary<TK, TV>(this Dictionary<TK, TV> ahDict)
+        {
+            Dictionary<TK, TV> ahRetVal = new Dictionary<TK, TV>();
+            foreach (TK cT in ahDict.Keys)
+                ahRetVal.Add(cT, ahDict[cT]);
+            return ahRetVal;
+        }
+#if SILVERLIGHT
+        public static TT ParentOfType<TT>(this System.Windows.DependencyObject element) where TT : System.Windows.DependencyObject
+        {
+            if (element == null)
+                return default(TT);
+
+            while ((element = System.Windows.Media.VisualTreeHelper.GetParent(element)) != null)
+            {
+                if (element is TT)
+                    return (TT)element;
+            }
+
+            return default(TT);
+        }
+#endif
     }
 }

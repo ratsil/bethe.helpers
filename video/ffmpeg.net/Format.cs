@@ -17,8 +17,12 @@ namespace ffmpeg.net
 				private Frame cFrame;
 				private Format.Video _cFormatSource;
 				private Format.Video _cFormatTarget;
-				public TransformContext(Format.Video cFormatSource, Format.Video cFormatTarget)
+                private object _oDisposeLock;
+                private bool _bDisposed;
+
+                public TransformContext(Format.Video cFormatSource, Format.Video cFormatTarget)
 				{
+                    _oDisposeLock = new object();
 					////lock (helper._oSyncRootGlobal)
 						pContext = Functions.sws_getContext(cFormatSource.nWidth, cFormatSource.nHeight, cFormatSource.ePixelFormat, cFormatTarget.nWidth, cFormatTarget.nHeight, cFormatTarget.ePixelFormat, Constants.SWS_BICUBIC, NULL, NULL, NULL);
 					if (NULL == pContext)
@@ -32,11 +36,21 @@ namespace ffmpeg.net
 					{
 						Dispose();
 					}
-					catch { }
-				}
-				public void Dispose()
+                    catch (Exception ex)
+                    {
+                        (new Logger()).WriteError(ex);
+                    }
+                }
+                public void Dispose()
 				{
-					if (NULL != pContext)
+                    lock (_oDisposeLock)
+                    {
+                        if (_bDisposed)
+                            return;
+                        _bDisposed = true;
+                    }
+
+                    if (NULL != pContext)
 					{
 						////lock (helper._oSyncRootGlobal)
 						{
@@ -65,10 +79,12 @@ namespace ffmpeg.net
 			}
 			private Dictionary<Video, TransformContext> _ahTransformContexts;
 			private ushort _nBitsPerPixel;
+            private object _oDisposeLock;
+            private bool _bDisposed;
 
-			//public IntPtr pAVFrame;
+            //public IntPtr pAVFrame;
 
-			public ushort nWidth
+            public ushort nWidth
 			{
 				get
 				{
@@ -97,46 +113,49 @@ namespace ffmpeg.net
 				}
 			}
 
-			public Video(ushort nWidth, ushort nHeight, PixelFormat ePixelFormat)
-				: this(nWidth, nHeight, ePixelFormat, 0)
+			public Video(ushort nWidth, ushort nHeight, PixelFormat ePixelFormat, AVFieldOrder eFieldsOrder)
+				: this(nWidth, nHeight, ePixelFormat, 0, eFieldsOrder)
 			{ }
-            public Video(ushort nWidth, ushort nHeight, PixelFormat ePixelFormat, byte nThreads)
-				: this(nWidth, nHeight, AVCodecID.CODEC_ID_RAWVIDEO, ePixelFormat, nThreads)
+            public Video(ushort nWidth, ushort nHeight, PixelFormat ePixelFormat, byte nThreads, AVFieldOrder eFieldsOrder)
+				: this(nWidth, nHeight, AVCodecID.CODEC_ID_RAWVIDEO, ePixelFormat, nThreads, eFieldsOrder)
 			{ }
             public Video(ushort nWidth, ushort nHeight, PixelFormat ePixelFormat, byte nThreads, uint nBitRate)
 				: this(nWidth, nHeight, AVCodecID.CODEC_ID_RAWVIDEO, ePixelFormat, nThreads, nBitRate)
 			{ }
 			public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat)
-				: this(nWidth, nHeight, eCodecID, ePixelFormat, 0)
+				: this(nWidth, nHeight, eCodecID, ePixelFormat, 0, AVFieldOrder.AV_FIELD_UNKNOWN)
 			{ }
-			public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, byte nThreads)
-				: this(nWidth, nHeight, eCodecID, ePixelFormat, NULL, nThreads)
+			public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, byte nThreads, AVFieldOrder eFieldsOrder)
+				: this(nWidth, nHeight, eCodecID, ePixelFormat, NULL, nThreads, eFieldsOrder)
 			{ }
             public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, byte nThreads, uint nBitRate)
-				: this(nWidth, nHeight, eCodecID, ePixelFormat, NULL, nThreads, nBitRate)
+				: this(nWidth, nHeight, eCodecID, ePixelFormat, NULL, nThreads, nBitRate, AVFieldOrder.AV_FIELD_UNKNOWN)
 			{ }
-			public Video(Video cFormat)
-                : this(cFormat, NULL)
+			public Video(Video cFormat, AVFieldOrder eFieldsOrder)
+                : this(cFormat, NULL, eFieldsOrder)
 			{ }
-			public Video(Video cFormat, IntPtr pAVCC)
-				: this(cFormat.nWidth, cFormat.nHeight, cFormat.eCodecID, cFormat.ePixelFormat, pAVCC)
+			public Video(Video cFormat, IntPtr pAVCC, AVFieldOrder eFieldsOrder)
+				: this(cFormat.nWidth, cFormat.nHeight, cFormat.eCodecID, cFormat.ePixelFormat, pAVCC, eFieldsOrder)
 			{ }
-			public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, IntPtr pAVCC)
-				: this(nWidth, nHeight, eCodecID, ePixelFormat, pAVCC, 0)
+			public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, IntPtr pAVCC, AVFieldOrder eFieldsOrder)
+				: this(nWidth, nHeight, eCodecID, ePixelFormat, pAVCC, 0, eFieldsOrder)
 			{ }
-            public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, IntPtr pAVCC, byte nThreads)
-                : this(nWidth, nHeight, eCodecID, ePixelFormat, pAVCC, nThreads, 800000)
+            public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, IntPtr pAVCC, byte nThreads, AVFieldOrder eFieldsOrder)
+                : this(nWidth, nHeight, eCodecID, ePixelFormat, pAVCC, nThreads, 800000, eFieldsOrder)
             { }
-			public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, IntPtr pAVCC, byte nThreads, uint nBitRate)
-				: base(eCodecID, pAVCC, nThreads)
+			public Video(ushort nWidth, ushort nHeight, AVCodecID eCodecID, PixelFormat ePixelFormat, IntPtr pAVCC, byte nThreads, uint nBitRate, AVFieldOrder eFieldsOrder)
+				: base(eCodecID, pAVCC, nThreads, eFieldsOrder)
 			{
+                _oDisposeLock = new object();
 				int nResult = 0;
 				_ahTransformContexts = new Dictionary<Video, TransformContext>();
                 nBufferSize = Functions.avpicture_get_size(ePixelFormat, nWidth, nHeight);
                 _nBitsPerPixel = (ushort)(nBufferSize * 8 / (nWidth * nHeight));
 				if (_bEncode)
 				{
+
 					stAVCodecContext.codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
+					stAVCodecContext.field_order = eFieldsOrder;  // чо-то толку нет от полей (((
 					stAVCodecContext.width = nWidth;
 					stAVCodecContext.height = nHeight;
 					stAVCodecContext.pix_fmt = ePixelFormat;
@@ -217,17 +236,24 @@ namespace ffmpeg.net
 				}
 			}
 			override public void Dispose()
-			{
-				////lock (helper._oSyncRootGlobal)
-					if (NULL != pAVCodecContext)
-						Functions.avcodec_close(pAVCodecContext);
-				foreach (TransformContext cTransform in _ahTransformContexts.Values)
-					cTransform.Dispose();
-				_ahTransformContexts.Clear();
-				base.Dispose();
-			}
+            {
+                lock (_oDisposeLock)
+                {
+                    if (_bDisposed)
+                        return;
+                    _bDisposed = true;
+                }
 
-			public Frame Transform(Video cFormatVideoTarget, Frame cFrameSource)
+                ////lock (helper._oSyncRootGlobal)
+                if (NULL != pAVCodecContext)
+                    Functions.avcodec_close(pAVCodecContext);
+                foreach (TransformContext cTransform in _ahTransformContexts.Values)
+                    cTransform.Dispose();
+                _ahTransformContexts.Clear();
+                base.Dispose();
+            }
+
+            public Frame Transform(Video cFormatVideoTarget, Frame cFrameSource)
 			{
                 return Transform(cFormatVideoTarget, cFrameSource, null);
 			}
@@ -235,7 +261,7 @@ namespace ffmpeg.net
 			{
                 if (!_ahTransformContexts.ContainsKey(cFormatVideoTarget) || null == _ahTransformContexts[cFormatVideoTarget])
                 {
-                    foreach (Video cFormatVideo in _ahTransformContexts.Keys.Where(o => NULL == o.pAVCodecContext).ToArray())
+                    foreach (Video cFormatVideo in _ahTransformContexts.Keys.Where(o => NULL == o.pAVCodecContext))
                     {
                         _ahTransformContexts[cFormatVideo].Dispose();
                         _ahTransformContexts.Remove(cFormatVideo);
@@ -261,7 +287,7 @@ namespace ffmpeg.net
 				try
 				{
                     if (ePixelFormat == cFormatVideoTarget.ePixelFormat && nHeight == cFormatVideoTarget.nHeight && nWidth == cFormatVideoTarget.nWidth)
-                        return new Frame[] { new Frame(cFrameSource.aBytes) { nPTS = cFrameSource.nPTS, bKeyframe = cFrameSource.bKeyframe } };
+                        return new Frame[] { new Frame(cFrameSource.aBytesCopy) { nPTS = cFrameSource.nPTS, bKeyframe = cFrameSource.bKeyframe } };
                     if (eCodecID == cFormatTarget.eCodecID || NULL != _pCodec)
                         throw new NotImplementedException(); //TODO доделать конверт из encoded в raw
 					
@@ -301,6 +327,16 @@ namespace ffmpeg.net
 				}
 				return aRetVal.ToArray();
 			}
+			public override bool IsAlikeTo(Format cFormat)
+			{
+				if (!(cFormat is Format.Video))
+					return false;
+				Format.Video cFV = (Format.Video)cFormat;
+				if (ePixelFormat == cFV.ePixelFormat && nWidth == cFV.nWidth && nHeight == cFV.nHeight && nBufferSize == cFV.nBufferSize)
+					return true;
+				else
+					return false;
+			}
 		}
 		public class Audio : Format
 		{
@@ -310,9 +346,12 @@ namespace ffmpeg.net
                 private Frame cSamples;
 				private Format.Audio _cFormatSource;
 				private Format.Audio _cFormatTarget;
+                private object _oDisposeLock;
+                private bool _bDisposed;
 
                 public TransformContext(Format.Audio cFormatSource, Format.Audio cFormatTarget)
 				{
+                    _oDisposeLock = new object();
                     pContext = NULL;
                     ////lock (helper._oSyncRootGlobal)
                     {
@@ -329,22 +368,33 @@ namespace ffmpeg.net
 					{
 						Dispose();
 					}
-					catch { }
-				}
-				public void Dispose()
+                    catch (Exception ex)
+                    {
+                        (new Logger()).WriteError(ex);
+                    }
+                }
+                public void Dispose()
 				{
-					if (NULL != pContext)
+                    lock (_oDisposeLock)
+                    {
+                        if (_bDisposed)
+                            return;
+                        _bDisposed = true;
+                    }
+
+                    if (NULL != pContext)
 					{
                         Functions.swr_free(ref pContext);
                         pContext = NULL;
 					}
                     if (null != cSamples)
 						cSamples.Dispose();
-				}
+					cSamples = null;
+                }
 				public Frame Process(Frame cSamplesSource)
 				{
-                    if (null == cSamples)
-						cSamples = new Frame(_cFormatTarget);
+					if (null == cSamples)
+						cSamples = File.Input.FramesRotation.Dequeue(_cFormatTarget, File.Input.FramesRotation.Type.normal, 5); // new Frame(_cFormatTarget);
 					Process(cSamplesSource, cSamples);
 					return cSamples;
 				}
@@ -360,8 +410,10 @@ namespace ffmpeg.net
 			}
 			private Dictionary<Audio, TransformContext> _ahTransformContexts;
 			private List<List<byte>> aByteStream;
+            private object _oDisposeLock;
+            private bool _bDisposed;
 
-			public int nSamplesRate
+            public int nSamplesRate
 			{
 				get
 				{
@@ -417,10 +469,11 @@ namespace ffmpeg.net
 				: this(nSamplesRate, nChannelsQty, eCodecID, eSampleFormat, pAVCC, 0, 128000)
 			{ }
             public Audio(int nSamplesRate, int nChannelsQty, AVCodecID eCodecID, AVSampleFormat eSampleFormat, IntPtr pAVCC, byte nThreads, uint nBitRate)
-				: base(eCodecID, pAVCC, nThreads)
+				: base(eCodecID, pAVCC, nThreads, AVFieldOrder.AV_FIELD_UNKNOWN)
 			{
-				//_pBytesStream = NULL;
-				_ahTransformContexts = new Dictionary<Audio, TransformContext>();
+                _oDisposeLock = new object();
+                //_pBytesStream = NULL;
+                _ahTransformContexts = new Dictionary<Audio, TransformContext>();
                 nBitsPerSample = Functions.av_get_bits_per_sample_fmt(eSampleFormat);
                 if(1 > nBitsPerSample)
 				    throw new Exception("unknown sample format");
@@ -482,10 +535,27 @@ namespace ffmpeg.net
 			}
 			override public void Dispose()
 			{
-				//lock (helper._oSyncRootGlobal)
-				{
+                lock (_oDisposeLock)
+                {
+                    if (_bDisposed)
+                        return;
+                    _bDisposed = true;
+                }
+
+                //lock (helper._oSyncRootGlobal)
+                {
+                    if (null != _ahTransformContexts)
+					{
+						foreach (TransformContext cTC in _ahTransformContexts.Values)
+						{
+							cTC.Dispose();
+						}
+						_ahTransformContexts.Clear();
+					}
 					if (NULL != pAVCodecContext)
+					{
 						Functions.avcodec_close(pAVCodecContext);
+					}
 				}
 				base.Dispose();
 			}
@@ -501,7 +571,7 @@ namespace ffmpeg.net
 
 					if (!_ahTransformContexts.ContainsKey(cFormatAudioTarget) || null == _ahTransformContexts[cFormatAudioTarget])
                     {
-                        foreach (Audio cFormatAudio in _ahTransformContexts.Keys.Where(o => NULL == o.pAVCodecContext).ToArray())
+                        foreach (Audio cFormatAudio in _ahTransformContexts.Keys.Where(o => NULL == o.pAVCodecContext))
                         {
                             _ahTransformContexts[cFormatAudio].Dispose();
                             _ahTransformContexts.Remove(cFormatAudio);
@@ -536,7 +606,7 @@ namespace ffmpeg.net
                     if (eCodecID == cFormatTarget.eCodecID)
                     {
                         if (nSamplesRate == cFormatAudioTarget.nSamplesRate && eSampleFormat == cFormatAudioTarget.eSampleFormat && nChannelsQty == cFormatAudioTarget.nChannelsQty)
-                            return new Frame[] { new Frame(null, cFrameSource.aBytes) { nPTS = cFrameSource.nPTS, bKeyframe = cFrameSource.bKeyframe } };
+                            return new Frame[] { new Frame(null, cFrameSource.aBytesCopy) { nPTS = cFrameSource.nPTS, bKeyframe = cFrameSource.bKeyframe } };
                         if (NULL != _pCodec)
                             throw new NotImplementedException(); //TODO доделать конверт из encoded в raw
                     }
@@ -665,6 +735,30 @@ namespace ffmpeg.net
                 }
 				return aRetVal.ToArray();
 			}
+			public override bool IsAlikeTo(Format cFormat)
+			{
+				if (!(cFormat is Format.Audio))
+					return false;
+				Format.Audio cFV = (Format.Audio)cFormat;
+				if (stAVCodecContext.frame_size == cFV.stAVCodecContext.frame_size 
+					&& nBitsPerSample == cFV.nBitsPerSample 
+					&& nChannelsQty == cFV.nChannelsQty 
+					&& nBufferSize == cFV.nBufferSize
+					&& stAVCodecContext.channel_layout == cFV.stAVCodecContext.channel_layout
+					&& eSampleFormat == cFV.eSampleFormat
+                    && nSamplesRate == cFV.nSamplesRate
+					&& eCodecID == cFV.eCodecID
+					&& stAVCodecContext.time_base.den == cFV.stAVCodecContext.time_base.den
+					&& stAVCodecContext.time_base.num == cFV.stAVCodecContext.time_base.num
+					&& stAVCodecContext.pkt_timebase.den == cFV.stAVCodecContext.pkt_timebase.den
+					&& stAVCodecContext.pkt_timebase.num == cFV.stAVCodecContext.pkt_timebase.num
+					&& stAVCodecContext.sample_aspect_ratio.den == cFV.stAVCodecContext.sample_aspect_ratio.den
+					&& stAVCodecContext.sample_aspect_ratio.num == cFV.stAVCodecContext.sample_aspect_ratio.num
+					)
+					return true;
+				else
+					return false;
+			}
 		}
 
 		static private IntPtr NULL = IntPtr.Zero;
@@ -673,8 +767,10 @@ namespace ffmpeg.net
 		protected bool _bEncode;
 		public int nBufferSize;
         private Frame _cFrame;
+        private object _oBaseDisposeLock;
+        private bool _bBaseDisposed;
 
-		public IntPtr pAVCodecContext;
+        public IntPtr pAVCodecContext;
 		internal AVCodecContext stAVCodecContext;
 		public AVCodecID eCodecID
 		{
@@ -683,11 +779,27 @@ namespace ffmpeg.net
 				return stAVCodecContext.codec_id;
 			}
 		}
+		public int nAspectRatio_dividend
+		{
+			get
+			{
+				return stAVCodecContext.sample_aspect_ratio.den;
+			}
+		}
+		public int nAspectRatio_divider
+		{
+			get
+			{
+				return stAVCodecContext.sample_aspect_ratio.num;
+			}
+		}
 
 		private Format()
 		{
-		}
-		protected Format(AVCodecID eCodecID, IntPtr pAVCC, byte nThreads)
+            _oBaseDisposeLock = new object();
+        }
+		protected Format(AVCodecID eCodecID, IntPtr pAVCC, byte nThreads, AVFieldOrder eFieldsOrder)
+            :this()
 		{
             helper.Initialize();
 			_pCodec = NULL;
@@ -732,7 +844,8 @@ namespace ffmpeg.net
 			if(1 > nThreads)
 				nThreads = (byte)Environment.ProcessorCount;
 			stAVCodecContext.thread_count = nThreads;
-			Marshal.StructureToPtr(stAVCodecContext, pAVCodecContext, true);
+			stAVCodecContext.field_order = eFieldsOrder;
+            Marshal.StructureToPtr(stAVCodecContext, pAVCodecContext, true);
 		}
 		~Format()
 		{
@@ -747,6 +860,13 @@ namespace ffmpeg.net
 		}
 		virtual public void Dispose()
 		{
+            lock (_oBaseDisposeLock)
+            {
+                if (_bBaseDisposed)
+                    return;
+                _bBaseDisposed = true;
+            }
+
             if (_bAVCodecContextAllocationInternal && NULL != pAVCodecContext)
                 Functions.av_freep(ref pAVCodecContext);
             else
@@ -757,6 +877,7 @@ namespace ffmpeg.net
 
 		abstract protected AVCodecID CodecIDRawGet();
 		abstract public Frame[] Convert(Format cFormatTarget, Frame cFrameSource);
-        //abstract public Frame[] Flush(Format cFormatTarget);
+		//abstract public Frame[] Flush(Format cFormatTarget);
+		abstract public bool IsAlikeTo(Format cFormat);
     }
 }

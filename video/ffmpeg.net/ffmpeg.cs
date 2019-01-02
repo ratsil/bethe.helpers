@@ -1239,7 +1239,7 @@ namespace ffmpeg.net
 		AV_AUDIO_SERVICE_TYPE_KARAOKE = 8,
 		AV_AUDIO_SERVICE_TYPE_NB ///< Not part of ABI
 	}
-	enum AVFieldOrder
+	public enum AVFieldOrder
 	{
 		AV_FIELD_UNKNOWN,
 		AV_FIELD_PROGRESSIVE,
@@ -1981,8 +1981,11 @@ namespace ffmpeg.net
 				if (NULL != _p)
 					Functions.av_freep(ref _p);
 			}
-			catch { }
-		}
+            catch (Exception ex)
+            {
+                (new Logger()).WriteError(ex);
+            }
+        }
 		static public implicit operator IntPtr(Functions cAVBase)
 		{
 			return cAVBase._p;

@@ -21,10 +21,18 @@ namespace helpers
 					return _cInstance._nCUDAVersion;
 				}
 			}
+            static public int nDisComThreadsQty
+            {
+                get
+                {
+                    return _cInstance._nDisComThreadsQty;
+                }
+            }
 
-			private byte _nCUDAVersion = 0;
+            private byte _nCUDAVersion;
+            private int _nDisComThreadsQty;
 
-			public Preferences()
+            public Preferences()
 				: base("//helpers/pixelsmap")
 			{
 			}
@@ -32,8 +40,17 @@ namespace helpers
 			{
                 if (null == cXmlNode || _bInitialized)
 					return;
-                _nCUDAVersion = cXmlNode.NodeGet("cuda").AttributeGet<byte>("version");
-			}
+                _nCUDAVersion = 0;
+                if (null != cXmlNode.NodeGet("cuda", false))
+                    _nCUDAVersion = cXmlNode.NodeGet("cuda").AttributeGet<byte>("version");
+
+                _nDisComThreadsQty = -1;
+                if (null != cXmlNode.NodeGet("discom", false))
+                {
+                    string sQty = cXmlNode.NodeGet("discom").AttributeOrDefaultGet<string>("threads", "auto");
+                    _nDisComThreadsQty = sQty == "auto" ? -1 : int.Parse(sQty);
+                }
+            }
 		}
 	}
 }

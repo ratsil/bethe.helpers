@@ -5,25 +5,41 @@ using System.Runtime.InteropServices;
 
 namespace ffmpeg.net
 {
-    public class Frame
+    public class Frame : IEquatable<Frame>
     {
         static private IntPtr NULL = IntPtr.Zero;
-
-        public delegate bool DisposingDelegate(Frame cFrame);
-        public event DisposingDelegate Disposing;
+        static private int _nIDMax = 1000000000;
 
         static public object _oSyncRoot = new object();
         static public ulong _nAllocated = 0;
         static public ulong _nDisposed = 0;
 
+        public delegate bool DisposingDelegate(Frame cFrame);
+        public event DisposingDelegate Disposing;
+
         private GCHandle _cGCHandle;
         private IntPtr _pBytes;
+        private readonly int _nID;
 
         private IntPtr _pAVFrame;
         private long _nPTS;
         private byte[] _aBuffer;
         private int _nLength;
+        private bool _bDisposed;
+        private object _oDisposeLock;
 
+        static private int NextIDGet()
+        {
+            return System.Threading.Interlocked.Increment(ref _nIDMax);
+        }
+
+        public int nID
+        {
+            get
+            {
+                return _nID;
+            }
+        }
         public int nLength
         {
             get
@@ -58,7 +74,7 @@ namespace ffmpeg.net
                 return _aBuffer;
             }
         }
-        public byte[] aBytes
+        public byte[] aBytesCopy
         {
             get
             {
@@ -66,6 +82,10 @@ namespace ffmpeg.net
                     return aBuffer.Take(nLength).ToArray();
                 return aBuffer.ToArray();
             }
+        }
+		public void CopyBytesTo(byte[] aBytes)
+		{
+			Array.Copy(aBuffer, aBytes, _nLength);
         }
         public bool bKeyframe;
         public long nPTS
@@ -95,6 +115,8 @@ namespace ffmpeg.net
         {
             lock(_oSyncRoot)
                 _nAllocated++;
+            _nID = Frame.NextIDGet();
+            _oDisposeLock = new object();
             _aBuffer = null;
             bKeyframe = false;
             _pBytes = NULL;
@@ -116,7 +138,8 @@ namespace ffmpeg.net
 			//	nLineSize += 64 - nReminder;
             _nLength = cFormat.nChannelsQty * nLineSize;
             _aBuffer = new byte[_nLength];
-            bool bPlanar = (1 < cAVFrame.data.Count(o => NULL != o));
+			(new Logger()).WriteDebug4("frame format_frame: - new bytes processed! [size="+ _nLength + "]");
+			bool bPlanar = (1 < cAVFrame.data.Count(o => NULL != o));
             if (!bPlanar)
                 nLineSize = nLength;
             for (int nIndx = 0; cAVFrame.data.Length > nIndx; nIndx++)
@@ -132,13 +155,17 @@ namespace ffmpeg.net
         { }
         public Frame(int nLength)
             : this(null, new byte[nLength])
-        { }
+        {
+			(new Logger()).WriteDebug4("frame length: - new bytes processed! [size=" + nLength + "]");
+		}
         public Frame(byte[] aBytes)
             : this(null, aBytes)
         { }
         public Frame(Format cFormat, int nLength)
             : this(cFormat, new byte[nLength])
-        { }
+        {
+			(new Logger()).WriteDebug4("frame format_length: - new bytes processed! [size=" + nLength + "]");
+		}
         public Frame(Format cFormat, byte[] aBytes)
             : this()
         {
@@ -151,14 +178,26 @@ namespace ffmpeg.net
         {
             try
             {
-                Dispose();
+                Dispose(); // возврат фреймов - только через диспоз тут!
             }
-            catch { }
+            catch (Exception ex)
+            {
+                (new Logger()).WriteError(ex);
+            }
         }
-        public void Dispose()
+        public void Dispose()  // осторожно!! - много раз вызывается диспоз, т.к. это на самом деле не диспоз, а завуалированный frame_back, т.к. фрейм многоразовый
         {
-            if (null != Disposing && !Disposing(this))
-                return;
+            lock (_oDisposeLock)
+                if (null != Disposing && !Disposing(this))
+                    return;
+
+            lock (_oDisposeLock)  // выше не двигать!
+            {
+                if (_bDisposed)
+                    return;
+                _bDisposed = true;
+            }
+
             Disposing = null;
             if (NULL != _pAVFrame)
             {
@@ -173,8 +212,54 @@ namespace ffmpeg.net
             lock (_oSyncRoot)
                 _nDisposed++;
         }
+		public void Dispose(bool bForce)
+		{
+            if (bForce)
+			    Disposing = null;
+			Dispose();
+		}
 
-        private void Init(Format cFormat)
+        public bool Equals(Frame cFrame)
+        {
+            return null != cFrame && _nID == cFrame.nID;
+        }
+        public override bool Equals(object oFrame)
+        {
+            return Equals((Frame)oFrame);
+        }
+        public override int GetHashCode()
+        {
+            return nID;
+        }
+
+
+        public void PassSamples(Format.Audio cFormat)
+		{
+			if (1 > _nLength)
+				throw new NotImplementedException();
+
+			AVFrame cAVFrame = (AVFrame)Marshal.PtrToStructure(_pAVFrame, typeof(AVFrame));
+			if (0 < cAVFrame.width || 0 < cAVFrame.height || 1 > cAVFrame.nb_samples)
+				throw new NotImplementedException();
+			int nLineSize = cFormat.nBitsPerSample / 8 * cAVFrame.nb_samples;
+
+			_nLength = cFormat.nChannelsQty * nLineSize;
+			if (null == _aBuffer)
+			{
+				_aBuffer = new byte[_nLength];
+				(new Logger()).WriteDebug("passSamples: - new bytes processed! [size=" + _nLength + "]");
+			}
+			bool bPlanar = (1 < cAVFrame.data.Count(o => NULL != o));
+			if (!bPlanar)
+				nLineSize = nLength;
+			for (int nIndx = 0; cAVFrame.data.Length > nIndx; nIndx++)
+			{
+				if (NULL == cAVFrame.data[nIndx])
+					break;
+				Marshal.Copy(cAVFrame.data[nIndx], _aBuffer, nIndx * nLineSize, nLineSize);
+			}
+		}
+		private void Init(Format cFormat)
         {
             _cGCHandle = GCHandle.Alloc(aBuffer, GCHandleType.Pinned);
             _pBytes = _cGCHandle.AddrOfPinnedObject();

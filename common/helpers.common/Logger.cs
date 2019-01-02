@@ -24,25 +24,41 @@ namespace helpers
 			private TimeSpan _tsTotal;
 			private string _sMessage;
 			private string _sCategory;
-
+            private bool _bIsOff; // do nothing
+			public bool bIsRunning
+			{
+				get
+				{
+					return (_cStopwatch == null ? false : _cStopwatch.IsRunning);
+				}
+			}
 			public Timings(string sCategory)
 				: this(sCategory, eLevelMinimum)
 			{
 			}
-			public Timings(string sCategory, Level eLevelMin)
+			public Timings(string sCategory, Level eLevelTimings) 
 			{
-				if (Level.notice > eLevelMin)
+				if (Preferences.eLevel <= eLevelTimings)
 				{
 					_sCategory = sCategory;
 					_sMessage = "";
 					_tsTotal = TimeSpan.Zero;
 					_cStopwatch = Stopwatch.StartNew();
+                    _bIsOff = false;
 				}
 			}
-			public void CheckIn(string sPrefix)
+            public void TurnOff()
+            {
+                _bIsOff = true;
+            }
+            public void TurnOn()
+            {
+                _bIsOff = false;
+            }
+            public void CheckIn(string sPrefix)
 			{
-				if (null == _cStopwatch)
-					return;
+                if (_bIsOff || null == _cStopwatch)
+                    return;
 				_sMessage += "[" + sPrefix + ": " + _cStopwatch.Elapsed.TotalMilliseconds + " ms]";
 			}
 			public void Stop(string sMessage)
@@ -53,27 +69,39 @@ namespace helpers
 			{
 				Stop(sMessage, null, nThreshold);
 			}
-			public void Stop(string sMessage, string sPrefix, ulong nThreshold)
+            public double Stop(string sMessage, string sPrefix, ulong nThreshold)
+            {
+                if (_bIsOff || null == _cStopwatch)
+                    return -1;
+                _cStopwatch.Stop();
+                _tsTotal = _tsTotal.Add(_cStopwatch.Elapsed);
+                if (1 > nThreshold || _tsTotal.TotalMilliseconds > nThreshold)
+                {
+                    if (null != sPrefix)
+                        CheckIn(sPrefix);
+                    _sMessage = _sMessage.Replace("\n", "<br>");
+                    (new Logger(_sCategory)).WriteDebug(sMessage + " [" + "total" + ": " + _tsTotal.TotalMilliseconds + " ms (>" + nThreshold + " ms)]" + _sMessage);
+                }
+                return _tsTotal.TotalMilliseconds;
+            }
+            public void Restart(string sPrefix)
+            {
+                if (_bIsOff || null == _cStopwatch)
+                    return;
+                CheckIn(sPrefix);
+                _tsTotal = _tsTotal.Add(_cStopwatch.Elapsed);
+                _cStopwatch.Restart();
+            }
+            public void TotalRenew()
 			{
-				if (null == _cStopwatch)
-					return;
-				_cStopwatch.Stop();
-				_tsTotal = _tsTotal.Add(_cStopwatch.Elapsed);
-				if (1 > nThreshold || _tsTotal.TotalMilliseconds > nThreshold)
-				{
-					if (null != sPrefix)
-						CheckIn(sPrefix);
-					_sMessage += "[" + "total" + ": " + _tsTotal.TotalMilliseconds + " ms]";
-					(new Logger(_sCategory)).WriteDebug(sMessage + " " + _sMessage);
+                if (_bIsOff)
+                    return;
+                if (null != _cStopwatch)
+                {
+					_tsTotal = TimeSpan.Zero;
+					_cStopwatch.Restart();
+					_sMessage = "";
 				}
-			}
-			public void Restart(string sPrefix)
-			{
-				if (null == _cStopwatch)
-					return;
-				CheckIn(sPrefix);
-				_tsTotal = _tsTotal.Add(_cStopwatch.Elapsed);
-				_cStopwatch.Restart();
 			}
 		}
 
@@ -99,6 +127,10 @@ namespace helpers
                 {
                     _cInstance = new Preferences();
                 }
+                catch (System.Exception ex)
+                {
+                    (new Logger()).WriteError(ex);
+                }
                 finally
                 {
                 }
@@ -117,7 +149,21 @@ namespace helpers
                     return _cInstance._eLevel;
                 }
             }
-            static public bool bMail
+			static public bool bGCBlocking
+			{
+				get
+				{
+					return _cInstance._bGCBlocking;
+				}
+			}
+			static public string sSubfolder
+			{
+				get
+				{
+					return _cInstance._sSubfolder;
+				}
+			}
+			static public bool bMail
             {
                 get
                 {
@@ -159,7 +205,14 @@ namespace helpers
                     return _cInstance._sMailPassword;
                 }
             }
-            static public Regex[] aExcludes
+			static public int nSendInterval
+			{
+				get
+				{
+					return _cInstance._nSendInterval;
+				}
+			}
+			static public Regex[] aExcludes
             {
                 get
                 {
@@ -167,15 +220,20 @@ namespace helpers
                         return _cInstance._aExcludes.ToArray();
                 }
             }
+            static public void StaticInit() { }
 
             private File _cFile;
             private Level _eLevel;
+			private bool _bGCBlocking;
+			private string _sSubfolder;
             private Dictionary<Level, string> _ahMailTargets;
             private string _sMailSubjectPrefix;
             private string _sMailSource;
             private string _sMailServer;
             private string _sMailPassword;
-            private Regex[] _aExcludes;
+			private int _nSendInterval;
+
+			private Regex[] _aExcludes;
 
             private Preferences()
                 : base("//helpers/common/logger", (Logger.sPreferencesFile == null ? sFile : Logger.sPreferencesFile), false)
@@ -196,8 +254,15 @@ namespace helpers
                 catch
                 {
                     _eLevel = Level.notice;
-                }
-                XmlNode cXmlNodeChild = cXmlNode.NodeGet("file", false);
+				}
+                _aExcludes = new Regex[0];
+                _bGCBlocking = cXmlNode.AttributeOrDefaultGet<bool>("gc_block", true);
+				if (null == (_sSubfolder = cXmlNode.AttributeValueGet("subfolder", false)))
+					_sSubfolder = "";
+				else
+					_sSubfolder = _sSubfolder + SIO.Path.DirectorySeparatorChar;
+
+				XmlNode cXmlNodeChild = cXmlNode.NodeGet("file", false);
                 if (null != cXmlNodeChild)
                 {
                     _cFile = new File();
@@ -205,8 +270,8 @@ namespace helpers
                     if (null != _cFile.sPath && !SIO.Path.IsPathRooted(_cFile.sPath))
                         _cFile.sPath = SIO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _cFile.sPath);
                     _cFile.sFilename = cXmlNodeChild.AttributeValueGet("name", false);
-                    _cFile.bDate = cXmlNodeChild.AttributeGet<bool>("date", false);
-                    _cFile.bPID = cXmlNodeChild.AttributeGet<bool>("pid", false);
+                    _cFile.bDate = cXmlNodeChild.AttributeOrDefaultGet<bool>("date", false);
+                    _cFile.bPID = cXmlNodeChild.AttributeOrDefaultGet<bool>("pid", false);
                 }
 
                 cXmlNodeChild = cXmlNode.NodeGet("mail", false);
@@ -216,13 +281,14 @@ namespace helpers
                 {
                     if (null == (_sMailSubjectPrefix = cXmlNodeChild.AttributeValueGet("subject", false)))
                         throw new Exception("не указан префикс темы сообщения электронной почты [" + cXmlNodeChild.Name + "][subject]"); //TODO LANG
-                    _sMailSubjectPrefix = "[" + _sMailSubjectPrefix + "]";
                     if (null == (_sMailSource = cXmlNodeChild.AttributeValueGet("source", false)))
                         throw new Exception("не указан адрес отправителя сообщения электронной почты [" + cXmlNodeChild.Name + "][source]"); //TODO LANG
                     if (null == (_sMailServer = cXmlNodeChild.AttributeValueGet("server", false)))
                         throw new Exception("не указан сервер электронной почты [" + cXmlNodeChild.Name + "][server]"); //TODO LANG
                     if (null == (_sMailPassword = cXmlNodeChild.AttributeValueGet("password", false)))
                         throw new Exception("не указан пароль сервера электронной почты [" + cXmlNodeChild.Name + "][password]"); //TODO LANG
+
+                    _nSendInterval = cXmlNodeChild.AttributeOrDefaultGet<int>("send_interval", 60 * 5); // 5 minutes
 
                     XmlNode[] aXmlNodes = cXmlNodeChild.NodesGet("targets/target", false);
                     if (null == aXmlNodes)
@@ -251,8 +317,15 @@ namespace helpers
                     {
                         foreach (XmlNode cNode in aXmlNodes)
                         {
-                            if (!cNode.InnerXml.IsNullOrEmpty())
+                            try
+                            {
+                                if (!cNode.InnerXml.IsNullOrEmpty())
                                 aExcludes.Add(new Regex(cNode.InnerXml, RegexOptions.IgnoreCase | RegexOptions.Singleline));
+                            }
+                            catch
+                            {
+                                throw new Exception("указан некорректный шаблон поиска regex [" + cNode.InnerXml + "]"); //TODO LANG
+                            }
                         }
                     }
 
@@ -327,6 +400,10 @@ namespace helpers
             public class File : Target
             {
                 public string sFile;
+                static private object _oLock = new object();
+                static private long _nFreeSpaceMinimum = (long)10 * 1024 * 1024 * 1024;
+                static private DateTime _dtNextError = DateTime.MinValue;
+
                 public File(string sFullPath)
                     : base(TargetType.File)
                 {
@@ -335,10 +412,55 @@ namespace helpers
                     Regex r = new Regex(string.Format("[{0}]", Regex.Escape(regexSearch)));
                     this.sFile = SIO.Path.GetDirectoryName(sFullPath) + "/" + r.Replace(illegal, "");
                 }
-
+                private bool CheckFolder()
+                {
+                    if (!SIO.File.Exists(sFile))
+                    {
+                        lock (_oLock)
+                        {
+                            SIO.DirectoryInfo cDI = new SIO.DirectoryInfo(SIO.Path.GetDirectoryName(sFile));
+                            SIO.FileInfo[] aFI = cDI.GetFiles();
+                            if (aFI.Length > 4000)
+                            {
+                                int nI = 3900;
+                                foreach (SIO.FileInfo cFI in aFI.OrderBy(o => o.CreationTime))
+                                {
+                                    if (nI++ > aFI.Length)
+                                        break;
+                                    cFI.Delete();
+                                }
+                                (new Logger()).WriteError("too many files in the log directory [count=" + aFI.Length + "]");
+                            }
+                        }
+                    }
+                    long nFreeSpace;
+                    foreach (SIO.DriveInfo cDI in SIO.DriveInfo.GetDrives())
+                    {
+                        //(new Logger()).WriteNotice("FREE SPACE: [drive=" + cDI.GetType().ToString() + "][name=" + cDI.Name + "]");
+                        if (cDI.Name.ToLower() == SIO.Path.GetPathRoot(sFile).ToLower() && cDI.IsReady)
+                        {
+                            if ((nFreeSpace = cDI.AvailableFreeSpace) < _nFreeSpaceMinimum)
+                            {
+                                lock (_oLock)
+                                {
+                                    if (DateTime.Now > _dtNextError)
+                                    {
+                                        _dtNextError = DateTime.Now.AddMinutes(5);
+                                        (new Logger()).WriteError("FREE SPACE ALERT ON DISK FOR LOGGER!!! [name=" + cDI.Name + "][free_space=" + nFreeSpace.ToString() + " Bytes]");
+                                    }
+                                }
+                                return false;
+                            }
+                            else if (!SIO.File.Exists(sFile))
+                                (new Logger()).WriteNotice("FREE SPACE: [name=" + cDI.Name + "][free_space=" + ((double)nFreeSpace / 1024 / 1024 / 1024).ToString("0.000") + " GB]");
+                        }
+                    }
+                    return true;
+                }
                 override public void Write(Message cMessage)
                 {
-                    SIO.File.AppendAllText(sFile, cMessage.ToString().NormalizeNewLines().Replace("<br>", Environment.NewLine).Replace(Environment.NewLine, "\t\t" + Environment.NewLine) + Environment.NewLine);
+                    if (CheckFolder())
+                        SIO.File.AppendAllText(sFile, cMessage.ToString().NormalizeNewLines().Replace("<br>", Environment.NewLine).Replace(Environment.NewLine, "\t\t" + Environment.NewLine) + Environment.NewLine, Encoding.UTF8);
                 }
             }
             public class Database : Target
@@ -353,56 +475,141 @@ namespace helpers
             }
             public class Email : Target
             {
-                static private Queue<string> _aqMessages = new Queue<string>();
-                static private DateTime _dtSend = DateTime.MinValue;
-                static public void Send(string sServer, string sUser, string sPassword, string sRecipients, string sSubject, string sBody)
-                {
-                    if (!sServer.IsNullOrEmpty() && !sUser.IsNullOrEmpty() && !sPassword.IsNullOrEmpty() && !sRecipients.IsNullOrEmpty())
-                    {
-                        MailMessage message = new MailMessage(sUser, sRecipients, sSubject, sBody);
-                        SmtpClient cSmtpClient = new SmtpClient(sServer);
-                        cSmtpClient.Port = 587;
-                        cSmtpClient.EnableSsl = true;
-                        cSmtpClient.DeliveryMethod = SmtpDeliveryMethod.Network;
-                        cSmtpClient.UseDefaultCredentials = false;
-                        cSmtpClient.Credentials = new NetworkCredential(message.From.Address, sPassword);
-                        //cSmtpClient.Credentials = CredentialCache.DefaultNetworkCredentials;
-                        cSmtpClient.SendAsync(message, null);
+				private class CumulativeMessageOperate
+				{
+					private class CumulativeMessage
+					{
+						public Level eLevel;
+						public string sCumulativeMessage;
+						public CumulativeMessage()
+						{
+							eLevel = 0;
+							sCumulativeMessage = "";
+						}
+						public void Enqueue(Message cMessage)
+						{
+							if (eLevel < cMessage.eLevel)
+								eLevel = cMessage.eLevel;
+							sCumulativeMessage += cMessage.ToString() + Environment.NewLine;
+						}
+					}
+					private Dictionary<string, CumulativeMessage> _ahRecipientAndMessage;
+					private string sRecepients;
+					private string sSubject;
+                    public Level eLevelCurrent;
+                    public Level eLevelSent;
+                    public CumulativeMessageOperate()
+					{
+						_ahRecipientAndMessage = new Dictionary<string, CumulativeMessage>();
+					}
+					public void Reset()
+					{
+						_ahRecipientAndMessage.Clear();
+                        eLevelSent = eLevelCurrent;
                     }
-                }
-                public Email()
-                    : base(TargetType.Email)
+					public void Enqueue(Message cMessage)
+					{
+						if ((sRecepients = Preferences.ahMailTargets[cMessage.eLevel]).IsNullOrEmpty())
+							return;
+
+						if (!_ahRecipientAndMessage.ContainsKey(sRecepients))
+							_ahRecipientAndMessage.Add(sRecepients, new CumulativeMessage());
+
+						_ahRecipientAndMessage[sRecepients].Enqueue(cMessage);
+                        eLevelCurrent = _ahRecipientAndMessage[sRecepients].eLevel;
+                    }
+					public void SendAndReset()
+					{
+						foreach (string sRecepients in _ahRecipientAndMessage.Keys)
+                        {
+                            sSubject = Preferences.sMailSubjectPrefix + " - " + _ahRecipientAndMessage[sRecepients].eLevel.ToString() + " - " + AppDomain.CurrentDomain.FriendlyName;   // google mail объединяет письма в цепочки правильно, только если слова в сабже разделены пробелами, а не [] или __
+                            Email.Send(Preferences.sMailServer, Preferences.sMailSource, Preferences.sMailPassword, sRecepients, sSubject, _ahRecipientAndMessage[sRecepients].sCumulativeMessage);
+						}
+						Reset();
+					}
+				}
+				static private CumulativeMessageOperate _cMessages;
+                static private DateTime _dtNextSend;
+				static private SYS.Timers.Timer _cTimerForSending;
+				static private bool _bTimerStarted;
+				static object _oLock;
+
+				static Email()
+				{
+					_oLock = new object();
+					_cMessages = new CumulativeMessageOperate();
+					_dtNextSend = DateTime.MinValue;
+					_bTimerStarted = false;
+					_cTimerForSending = new SYS.Timers.Timer(); 
+					_cTimerForSending.Interval = 5000; //ms
+					_cTimerForSending.AutoReset = true;
+					_cTimerForSending.Elapsed += delegate (object sender, SYS.Timers.ElapsedEventArgs e)
+					{
+						lock (_oLock)
+						{
+							if (DateTime.Now < _dtNextSend)
+								return;
+							SendAll(true);
+						}
+					};
+				}
+				static public void Send(string sServer, string sUser, string sPassword, string sRecipients, string sSubject, string sBody)
+				{
+					if (!sServer.IsNullOrEmpty() && !sUser.IsNullOrEmpty() && !sPassword.IsNullOrEmpty() && !sRecipients.IsNullOrEmpty())
+					{
+						MailMessage message = new MailMessage(sUser, sRecipients.Replace(";", ","), sSubject, sBody);
+						SmtpClient cSmtpClient = new SmtpClient(sServer);
+						cSmtpClient.Port = 587;
+						cSmtpClient.EnableSsl = true;
+						cSmtpClient.DeliveryMethod = SmtpDeliveryMethod.Network;
+						cSmtpClient.UseDefaultCredentials = false;
+						cSmtpClient.Credentials = new NetworkCredential(message.From.Address, sPassword);
+						//cSmtpClient.Credentials = CredentialCache.DefaultNetworkCredentials;
+						cSmtpClient.SendAsync(message, null);
+					}
+				}
+				public Email()
+					: base(TargetType.Email)
                 { }
 
                 override public void Write(Message cMessage)
                 {
-                    if (!Preferences.ahMailTargets.ContainsKey(cMessage.eLevel))
+					if (!Preferences.ahMailTargets.ContainsKey(cMessage.eLevel))
                         return;
                     foreach (Regex cRegex in Preferences.aExcludes)
                     {
                         if (cRegex.IsMatch(cMessage.sMessage))
                             return;
                     }
-                    lock (_aqMessages)
+                    lock (_oLock)
                     {
-                        _aqMessages.Enqueue(cMessage.ToString());
-                        if (DateTime.Now.Subtract(_dtSend) < TimeSpan.FromMinutes(5))
-                            return;
-                        string sEmailText = "";
-                        while (0 < _aqMessages.Count)
-                            sEmailText += _aqMessages.Dequeue() + Environment.NewLine;
+						_cMessages.Enqueue(cMessage);
 
-                        string sRecepients = "";
-                        string sSubject = "[" + cMessage.eLevel.ToString() + "][" + AppDomain.CurrentDomain.FriendlyName + "]";
+                        if (_cMessages.eLevelSent < cMessage.eLevel)
+                            _dtNextSend = DateTime.MinValue;
 
-                        sSubject = Preferences.sMailSubjectPrefix + sSubject;
-                        if (!(sRecepients = Preferences.ahMailTargets[cMessage.eLevel]).IsNullOrEmpty())
-                        {
-                            Send(Preferences.sMailServer, Preferences.sMailSource, Preferences.sMailPassword, sRecepients, sSubject, sEmailText);
-                            _dtSend = DateTime.Now;
-                        }
-                    }
+                        if (DateTime.Now < _dtNextSend)
+						{
+							if (!_bTimerStarted)
+							{
+								_cTimerForSending.Start();
+								_bTimerStarted = true;
+							}
+							return;
+						}
+						SendAll(false);
+					}
                 }
+				static private void SendAll(bool bStop)
+				{
+					_cMessages.SendAndReset();
+					if (bStop && _bTimerStarted)
+					{
+						_bTimerStarted = false;
+						_cTimerForSending.Stop();
+					}
+					_dtNextSend = DateTime.Now.AddSeconds(Preferences.nSendInterval);
+				}
             }
             public class Console : Target
             {
@@ -444,16 +651,9 @@ namespace helpers
             }
             static public bool operator ==(Message l, Message r)
             {
-                //int nRC = 0;
-
-                if (null == (object)l) //привидение к object нужно, чтобы не было рекурсии
-                {
-                    if (null == (object)r)
-                        return true;
-                    else
-                        return false;
-                }
-                else if (null == (object)r)
+                if (object.ReferenceEquals(null, l) && object.ReferenceEquals(null, r))   //привидение к object нужно, чтобы не было рекурсии
+                    return true;
+                if (object.ReferenceEquals(null, l) || object.ReferenceEquals(null, r))
                     return false;
                 if (l.eLevel == r.eLevel && l.sCategory == r.sCategory && l.sMessage == r.sMessage && l.sData == r.sData)
                     return true;
@@ -483,7 +683,22 @@ namespace helpers
             public DateTime dt { get; set; }
             public int nRepeatedCount { get; set; }
             public ulong nLoggerSession { get; set; }
-
+            
+            public int nLevelCumulateDuration
+            {
+                get
+                {
+                    if (eLevel < 0)
+                        return 600;
+                    else if (eLevel == Level.notice)
+                        return 300;
+                    else if (eLevel == Level.warning)
+                        return 60;
+                    else if (eLevel == Level.error || eLevel == Level.fatal)
+                        return 30;
+                    return 60;
+                }
+            }
             private System.Threading.ManualResetEvent _cMRE;
 
             public Message(Logger cLogger, TargetType? eTargetType, DateTime dt, Level eLevel, string sCategory, string sMessage, string sData)
@@ -579,6 +794,12 @@ namespace helpers
         {
             Target.Email.Send(Preferences.sMailServer, Preferences.sMailSource, Preferences.sMailPassword, Preferences.ahMailTargets[Level.notice], sSubject, sBody);
         }
+		static public void Email(string sTargets, string sSubject, string sBody)
+		{
+			Target.Email.Send(Preferences.sMailServer, Preferences.sMailSource, Preferences.sMailPassword, sTargets, sSubject, sBody);
+		}
+
+		static public string sProcessPrefix;  // для более наглядного разделения процессов с одинаковым именем, но разными функциями  (например ingenie.server раньше был)
 
 		private bool _bInited;
 
@@ -606,7 +827,18 @@ namespace helpers
         static private Dictionary<TargetType, Dictionary<string, Message>> _ahLastMessage;
         static private ThreadBufferQueue<Message> _aqMessagesQueue = new ThreadBufferQueue<Message>(0, false);
         static private ulong _nSessionID = 0;
+        static public uint nQueueLength
+        {
+            get
+            {
+                return _aqMessagesQueue.nCount;
+            }
+        }
 
+		static Logger()
+		{
+			sProcessPrefix = "";
+		}
         public Logger()
 #if !LOGGER_OFF
             : this("unknown")
@@ -670,7 +902,7 @@ return;
             {
                 lock (_aqMessagesQueue)
                 {
-                    if (null == _ahLastMessage)
+                    if (null == _ahLastMessage) 
                     {
                         _ahLastMessage = new Dictionary<TargetType, Dictionary<string, Message>>();
 						nSessionID = _nSessionID++;
@@ -702,11 +934,14 @@ return;
                 {
                     _sPath = SIO.Path.GetPathRoot(AppDomain.CurrentDomain.BaseDirectory);
                     if (SIO.Directory.Exists(_sPath + "logs"))
-                        _sPath += "logs/";
-                    else if (SIO.Directory.Exists(_sPath + "var/log/replica"))  // без этого не пишет логи на линухе (в var/log)... да и наверно так лучше, в реплицу...
+						_sPath += "logs/" + Preferences.sSubfolder;
+					else if (SIO.Directory.Exists(_sPath + "var/log/replica"))  // без этого не пишет логи на линухе (в var/log)... да и наверно так лучше - в реплицу...
                         _sPath += "var/log/replica/";
                     else
                         _sPath = "/var/log/replica/";
+
+					if (!SIO.Directory.Exists(_sPath))
+						SIO.Directory.CreateDirectory(_sPath);
                 }
             }
             if (null == _sFile)
@@ -715,8 +950,9 @@ return;
                     _sFile = (new Regex(string.Format("[{0}]", Regex.Escape(new string(SIO.Path.GetInvalidFileNameChars()))))).Replace(AppDomain.CurrentDomain.FriendlyName, "_");
                 else
                     _sFile = Preferences.cFile.sFilename;
-            }
-            if (_bDateAdd)
+			}
+			_sFile += (sProcessPrefix.Length == 0 ? "" : "_" + sProcessPrefix);
+			if (_bDateAdd)
                 _sFile += "_" + DateTime.Now.ToString("yyMMdd");
             if (_bPIDAdd)
                 _sFile += "_" + System.Diagnostics.Process.GetCurrentProcess().Id;
@@ -763,7 +999,6 @@ return;
             }
             return sRetVal;
         }
-
         static private void Worker(object cState)
         {
 #if LOGGER_OFF
@@ -771,8 +1006,15 @@ return;
 #endif
             Message cMessage = null, cLastMessage;
             List<Target> aTargets = new List<Target>();
-            try
+			Logger.Timings cTimings = new helpers.Logger.Timings("logger:Worker");
+			DateTime dtLast = DateTime.Now;
+			try
             {
+                (new Logger()).WriteDebug("logger prefs. pref file = " + sPreferencesFile);
+                (new Logger()).WriteDebug("logger prefs. gc_blocking = " + Preferences.bGCBlocking);
+                (new Logger()).WriteDebug("logger prefs. sSubfolder = " + Preferences.sSubfolder);
+                (new Logger()).WriteDebug("logger prefs. sFile = " + Preferences.sFile);
+                (new Logger()).WriteDebug("logger prefs. sMailSubjectPrefix = " + Preferences.sMailSubjectPrefix);
                 while (true)
                 {
                     try
@@ -811,7 +1053,7 @@ return;
                                 if (null != _ahLastMessage[cTarget.eType][cMessage.sCategory])
                                 {
                                     cLastMessage = _ahLastMessage[cTarget.eType][cMessage.sCategory];
-                                    if (cLastMessage != cMessage)
+                                    if (cLastMessage != cMessage || DateTime.Now.Subtract(cLastMessage.dt).TotalSeconds > cMessage.nLevelCumulateDuration)
                                     {
                                         if (0 < cLastMessage.nRepeatedCount)
                                             cTarget.Write(new Message(null, cMessage.eTargetType, cMessage.dt, cLastMessage.eLevel, cLastMessage.sCategory, cLastMessage.sMessage + "[сообщение было повторено " + cLastMessage.nRepeatedCount + " раз(а)]", null));
@@ -837,9 +1079,29 @@ return;
                     {
                         if (ex is System.Threading.ThreadAbortException)
                             throw;
-                        // ошибка логгирования ошибки (чтобы это не значило, в любом случае, ППЦ!!! 0.о );  два раза запустился воркер когда - такое было )))
+                        // ошибка логгирования ошибки (чтобы это не значило, в любом случае, ППЦ!!! 0.о );    два раза запустился воркер когда - такое было )))
                     }
                     cMessage = null;
+
+//					if (nIndx++ > 100)
+//					{
+//						nIndx = 0;
+//						cTimings.TotalRenew();
+
+//						if (Preferences.bGCBlocking)
+//							GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+//#if NETFX_OR_GREATER_452
+//						else
+//							GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, false);
+//#else
+//						else
+//							GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+//#endif
+
+//						cTimings.Stop("GC_log", "GC-" + "Optimized" + " " + System.Runtime.GCSettings.LatencyMode + " queue:" + _aqMessagesQueue.CountGet() + "[last launch = " + DateTime.Now.Subtract(dtLast).TotalSeconds + "s]", 10);
+//					}
+
+					dtLast = DateTime.Now;
 					System.Threading.Thread.Sleep(0);
                 }
             }
@@ -935,7 +1197,7 @@ return;
             Write(true, ex.eTargetType, DateTime.Now, ex.eLevel, (null == ex.sCategory ? _sCategory : ex.sCategory), ex.Message, aData);
 #endif
             //т.к. это фатальная ошибка, мы выкидываем ее дальше по цепочке... в результате, это приведет к завершению процесса (если тока где-нибудь не встретится нелоггируемый catch)
-            throw ex;
+            //throw ex;
         }
 
         public void WriteError(System.Exception ex)

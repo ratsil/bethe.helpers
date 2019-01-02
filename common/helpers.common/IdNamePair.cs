@@ -2,15 +2,19 @@
 using System.Collections.Generic;
 using System.Text;
 
+using System.Linq;
 using System.Collections;
 using System.Collections.ObjectModel;
 using helpers.extensions;
+using System.Xml.Serialization;
 
 namespace helpers
 {
+	//[XmlRoot("IdNamePair", Namespace = "helpers")]
+	[Serializable]
 	public class IdNamePair
 	{
-		public class Collection : Collection<IdNamePair>
+		public class Collection : Collection<IdNamePair>   // не юзается нигде
 		{
 			public class ChangedEventArgs : EventArgs
 			{
@@ -79,7 +83,7 @@ namespace helpers
 
 		public IdNamePair()
 		{
-			nID = -1;
+			nID = extensions.x.ToID(null);
 			sName = null;
 		}
 		public IdNamePair(long nID, string sName)
@@ -90,16 +94,38 @@ namespace helpers
 		}
 		public IdNamePair(string sName)
 			: this(-1, sName) { }
-		public IdNamePair(object oID, object oName) : this(oID.ToID(), oName.ToString()) { }
-		public IdNamePair(Hashtable aValues) : this(aValues["id"], aValues["sName"]) { }
+		public IdNamePair(object oID, object oName) 
+            : this(oID.ToID(), oName.ToString().FromDB()) { }
+		public IdNamePair(Hashtable aValues) 
+            : this(aValues["id"], aValues["sName"]) { }
 
 		public override int GetHashCode()
 		{
 			return nID.GetHashCode();
 		}
 		override public string ToString()
-		{
-			return sName;
-		}
-	}
+        {
+            string sRetVal = "(" + nID.ToString() + ", NULL)";
+            return sName == null ? sRetVal : sRetVal.Replace("NULL", sName);
+        }
+        public static IdNamePair[] GetArray(object oArray)
+        {
+            if (null == oArray)
+                return null;
+            string sArray = oArray.ToString();
+            if (sArray.IsNullOrEmpty() || sArray == "{}" || sArray == "{NULL}")
+                return null;
+            string[] aPair, aRows;
+            aRows = sArray.Replace("{\"(", "").Replace(")\"}", "").Split(new string[1] { ")\",\"(" }, StringSplitOptions.RemoveEmptyEntries);
+            List<IdNamePair> aRetVal = new List<IdNamePair>();
+            for (int nI = 0; nI < aRows.Length; nI++)
+            {
+                aPair = aRows[nI].Split(',');
+                if (aPair.Length < 2)
+                    break;
+                aRetVal.Add(new IdNamePair(aPair[0].ToID(), aPair[1].Replace("\\\"", "")));
+            }
+            return aRetVal.ToArray();
+        }
+    }
 }

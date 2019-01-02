@@ -286,7 +286,7 @@
     <value>An error occurred while save</value>
   </data>
   <data name="sErrorTimeout" xml:space="preserve">
-    <value>Timeout. (target action did not happen in {0} minutes)</value>
+    <value>Timeout. (target action did not happen in {0} seconds)</value>
   </data>
   <data name="sErrorUpdate" xml:space="preserve">
     <value>An error occurred while update</value>
@@ -475,7 +475,7 @@
     <value>Hide details</value>
   </data>
   <data name="sShowDetails" xml:space="preserve">
-    <value>sShowDetails</value>
+    <value>ShowDetails</value>
   </data>
   <data name="sOut" xml:space="preserve">
     <value>Out</value>
@@ -533,5 +533,47 @@
   </data>
   <data name="sFolder" xml:space="preserve">
     <value>Folder</value>
+  </data>
+  <data name="sEdit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="sChangesSaved" xml:space="preserve">
+    <value>changes have been saved</value>
+  </data>
+  <data name="sStart" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="sErrorDateTime" xml:space="preserve">
+    <value>Specified Date or Time is wrong</value>
+  </data>
+  <data name="sStartNow" xml:space="preserve">
+    <value>Start now</value>
+  </data>
+  <data name="sTags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="sDisplayDate" xml:space="preserve">
+    <value>Display date</value>
+  </data>
+  <data name="sRegistrationDate" xml:space="preserve">
+    <value>Registration date</value>
+  </data>
+  <data name="sSourceNumber" xml:space="preserve">
+    <value>Source number</value>
+  </data>
+  <data name="sTargetNumber" xml:space="preserve">
+    <value>Target number</value>
+  </data>
+  <data name="sAdvanced" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="sAdditionalInformation" xml:space="preserve">
+    <value>Additional information</value>
+  </data>
+  <data name="sAreYouSureStrong" xml:space="preserve">
+    <value>ARE YOU SURE???</value>
+  </data>
+  <data name="sErrorNoFile" xml:space="preserve">
+    <value>No file</value>
   </data>
 </root>

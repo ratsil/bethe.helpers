@@ -12,6 +12,9 @@ namespace helpers
 			public Logger()
 				: base("pixelsmap")
 			{ }
-		}
-	}
+            public Logger(string sCategory)
+                : base(sCategory)
+            { }
+        }
+    }
 }

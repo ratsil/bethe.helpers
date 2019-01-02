@@ -211,7 +211,7 @@
     <value>При сохранении произошла ошибка</value>
   </data>
   <data name="sErrorTimeout" xml:space="preserve">
-    <value>Таймаут. (требуемое действие не произошло в течение {0} минут)</value>
+    <value>Таймаут. (требуемое действие не произошло в течение {0} секунд)</value>
   </data>
   <data name="sErrorUnknown" xml:space="preserve">
     <value>неизвестная ошибка</value>
@@ -530,5 +530,50 @@
   </data>
   <data name="sFolder" xml:space="preserve">
     <value>Папка</value>
+  </data>
+  <data name="sEdit" xml:space="preserve">
+    <value>Редактировать</value>
+  </data>
+  <data name="sChangesSaved" xml:space="preserve">
+    <value>изменения сохранены</value>
+  </data>
+  <data name="sStart" xml:space="preserve">
+    <value>Запуск</value>
+  </data>
+  <data name="sErrorDateTime" xml:space="preserve">
+    <value>Указана некорректаная дата или время</value>
+  </data>
+  <data name="sStartNow" xml:space="preserve">
+    <value>Немедленный запуск</value>
+  </data>
+  <data name="sTags" xml:space="preserve">
+    <value>Ключевые слова</value>
+  </data>
+  <data name="sDisplayDate" xml:space="preserve">
+    <value>Дата показа</value>
+  </data>
+  <data name="sRegistrationDate" xml:space="preserve">
+    <value>Дата регистрации</value>
+  </data>
+  <data name="sSourceNumber" xml:space="preserve">
+    <value>Номер абонента</value>
+  </data>
+  <data name="sTargetNumber" xml:space="preserve">
+    <value>Номер службы</value>
+  </data>
+  <data name="sAdvanced" xml:space="preserve">
+    <value>Дополнительно</value>
+  </data>
+  <data name="sAdditionalInformation" xml:space="preserve">
+    <value>Дополнительная информация</value>
+  </data>
+  <data name="sFiles" xml:space="preserve">
+    <value>Файлы</value>
+  </data>
+  <data name="sAreYouSureStrong" xml:space="preserve">
+    <value>ВЫ УВЕРЕНЫ???</value>
+  </data>
+  <data name="sErrorNoFile" xml:space="preserve">
+    <value>Нет файла</value>
   </data>
 </root>

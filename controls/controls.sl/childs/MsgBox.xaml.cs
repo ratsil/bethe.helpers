@@ -16,6 +16,7 @@ using System.Xml.Serialization;
 
 using helpers.extensions;
 using g = globalization;
+using System.ComponentModel;
 
 namespace controls.childs.sl
 {
@@ -52,10 +53,18 @@ namespace controls.childs.sl
 		private CtrlIsInputCorrect _fIsInputCorrect;
         private Type _enType = Type.Unknown;
         public MsgBoxButton enMsgResult;
+		private string _sText;
         public string sText
         {
-            get { return _ui_tbText.Text; }
-            private set { _ui_tbText.Text = value; }
+            get
+			{
+				return _ui_tbText.Text;
+			}
+            private set
+			{
+				_sText = value;
+				_ui_tbText.Text = null == value ? "" : value;
+			}
         }
 		public bool bTextIsReadOnly
 		{
@@ -80,6 +89,7 @@ namespace controls.childs.sl
 			_ui_tmpDateTime.ValueChanged += new RoutedPropertyChangedEventHandler<DateTime?>(_ui_tmpDateTime_ValueChanged);
             _ui_dtpDateTime.DisplayDateStart = dtMinDate;
             _ui_dtpDateTime.DisplayDateEnd = dtMaxDate;
+			_sText = null;
 			if (dtSelected < dtMinDate)
 			{
 				_ui_dtpDateTime.SelectedDate = dtMinDate;
@@ -130,8 +140,18 @@ namespace controls.childs.sl
             base.OnOpened();
             _ui_MsgBox.Width = _ui_MsgBox.ActualWidth + 30;
             this.AddHandler(Button.KeyDownEvent, new KeyEventHandler(_ui_This_KeyDown), true);
-        }
-        protected override void OnClosed(EventArgs e)
+			if (null != _sText)
+			{
+				try
+				{
+					System.Windows.Browser.HtmlPage.Plugin.Focus();
+				}
+				catch { }
+				_ui_tbText.Focus();
+				_ui_tbText.SelectionStart = sText.Length;  // чтобы сразу печатать можно было
+			}
+		}
+		protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
             _bShowTextBox = false;
@@ -230,7 +250,7 @@ namespace controls.childs.sl
         public void ShowError(string sMsg)
         {
             _ui_tbText.IsReadOnly = true;
-            Show(sMsg, g.Common.sError, MsgBoxButton.OK);
+            Show(g.Common.sError, g.Common.sError, MsgBoxButton.OK, sMsg);
         }
         public void ShowError(string sMsg, ListBox cLB)
         {
@@ -315,7 +335,8 @@ namespace controls.childs.sl
         {
             _bShowTextBox = true;
             this.sText = sText;
-            this.Show(sMsg, sTitle, enBtn);
+			_ui_tbText.IsReadOnly = false;
+			this.Show(sMsg, sTitle, enBtn);
         }
         private void OKButton_Click(object sender, RoutedEventArgs e)
         {
@@ -373,6 +394,13 @@ namespace controls.childs.sl
 			}
 			return bRes;
 		}
-    }
+		protected override void OnClosing(CancelEventArgs e)
+		{
+			Progress _dlgProgress = new Progress();
+			base.OnClosing(e);
+			_dlgProgress.Show();
+			_dlgProgress.Close();
+		}
+	}
 }
 

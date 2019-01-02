@@ -118,24 +118,6 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="CUDAFunctions_11_x32" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\CUDAFunctions.11.x32.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="CUDAFunctions_11_x64" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\CUDAFunctions.11.x64.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="CUDAFunctions_12_x32" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\CUDAFunctions.12.x32.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="CUDAFunctions_12_x64" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\CUDAFunctions.12.x64.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="CUDAFunctions_13_x32" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\CUDAFunctions.13.x32.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="CUDAFunctions_13_x64" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\CUDAFunctions.13.x64.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
   <data name="CUDAFunctions_20_x32" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>Resources\CUDAFunctions.20.x32.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
@@ -165,5 +147,8 @@
   </data>
   <data name="CUDAFunctions_50_x64" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>Resources\CUDAFunctions.50.x64.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="CUDAFunctions_52_x64" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>Resources\CUDAFunctions.52.x64.cubin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
 </root>

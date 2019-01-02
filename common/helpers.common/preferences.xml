@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<preferences>
+	<helpers>
+		<pixelsmap>
+			<cuda version="21" />
+		</pixelsmap>
+		<common>
+			<logger level="debug1" gc_block="false" subfolder="channel">
+				<mail subject="CHANNEL" source="alerting@example.com" server="smtp.example.com" password="" send_interval="300">   <!-- send_interval in seconds -->
+					<targets>
+						<target level="warning">user1@example.com,user2@example.com</target>
+						<target level="error">user@example.com</target>
+						<target level="fatal">user@example.com</target>
+					</targets>
+					<excludes>
+						<pattern>.*bad last audio frame.*</pattern>
+					</excludes>
+				</mail>
+			</logger>
+		</common>
+	</helpers>
+</preferences>

@@ -51,8 +51,9 @@ namespace controls.sl
         private bool _bThisLostFocus = false;
         private System.Windows.Threading.DispatcherTimer _cTimerForLostFocus;
         private System.Reflection.PropertyInfo _cPropertyTarget;
+		private List<System.Reflection.PropertyInfo> _aPropertyTargets;
 
-        public string sDisplayMemberPath
+		public string sDisplayMemberPath
         {
             get
             {
@@ -126,8 +127,9 @@ namespace controls.sl
             }
         }
         public int nMaxItemsInListOrTable;
+		public string[] aAdditionalSearchFields;
 
-        public string sCaption
+		public string sCaption
         {
             get
             {
@@ -290,8 +292,17 @@ namespace controls.sl
             if (null != ItemSelectedGet)
                 oItemSelected = ItemSelectedGet();
             object cItem = (aItemsSource = aItemsSourceInitial).ToList().FirstOrDefault();
-            if (null != cItem && null != sDisplayMemberPath)
-                _cPropertyTarget = (System.Reflection.PropertyInfo)cItem.GetType().GetMember(sDisplayMemberPath)[0];
+			_aPropertyTargets = new List<System.Reflection.PropertyInfo>();
+			if (null != cItem && null != sDisplayMemberPath)
+			{
+				_cPropertyTarget = (System.Reflection.PropertyInfo)cItem.GetType().GetMember(sDisplayMemberPath)[0];
+				_aPropertyTargets.Add(_cPropertyTarget);
+			}
+			if (!aAdditionalSearchFields.IsNullOrEmpty())
+			{
+				foreach (string sS in aAdditionalSearchFields)
+					_aPropertyTargets.Add((System.Reflection.PropertyInfo)cItem.GetType().GetMember(sS)[0]);
+			}
             string sNewName = "";
             if (0 < _ui_tbName.Text.Length)
             {
@@ -352,20 +363,38 @@ namespace controls.sl
         {
             List<object> aRetVal = new List<object>();
             List<object> aStartedWith = new List<object>();
-            sPattern = sPattern.ToLower();
+			List<object> aAdditional = new List<object>();
+			List<object> aAdditionalStartWidth = new List<object>();
+			sPattern = sPattern.ToLower();
             string sValue;
             foreach (object o in aItemsSource)
             {
-                sValue = _cPropertyTarget.GetValue(o, null).ToString().ToLower().Trim();
-                if (sValue.Contains(sPattern))
+				for (int nI=0;nI< _aPropertyTargets.Count;nI++)
                 {
-                    if (sValue.StartsWith(sPattern))
-                        aStartedWith.Add(o);
-                    else
-                        aRetVal.Add(o);
-                }
+                    sValue = _aPropertyTargets[nI].GetValue(o, null) == null ? "" : _aPropertyTargets[nI].GetValue(o, null).ToString().ToLower().Trim();
+                    if (sValue.Contains(sPattern))
+					{
+						if (nI == 0)
+						{
+							if (sValue.StartsWith(sPattern))
+								aStartedWith.Add(o);
+							else
+								aRetVal.Add(o);
+						}
+						else
+						{
+							if (sValue.StartsWith(sPattern))
+								aAdditionalStartWidth.Add(o);
+							else
+								aAdditional.Add(o);
+						}
+						break;
+					}
+				}
             }
-            aRetVal.InsertRange(0, aStartedWith);
+			aRetVal.InsertRange(0, aAdditionalStartWidth);
+			aRetVal.InsertRange(0, aStartedWith);
+			aRetVal.AddRange(aAdditional);
             return aRetVal;
         }
         private Dictionary<string, string> GetTransliterationDictionary(bool bInvert)

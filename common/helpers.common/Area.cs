@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Xml;
+using helpers.extensions;
 
 namespace helpers
 {
@@ -13,7 +15,10 @@ namespace helpers
 			upper_right,
 			bottom_left,
 			bottom_right,
-			center
+			center,
+			center_horizontal,
+			center_vertical,
+			unknown,
 		}
 		[Serializable]
 		public class Offset
@@ -28,6 +33,23 @@ namespace helpers
 			public Offset()
 				: this(0, 0)
 			{
+			}
+            public Offset(XmlNode cXmlNode)
+                :this()
+            {
+                LoadXML(cXmlNode);
+            }
+            public void LoadXML(XmlNode cXmlNode)
+			{
+				string sTMP;
+				sTMP = cXmlNode.AttributeValueGet("x", false);
+				if (null == sTMP)
+					sTMP = cXmlNode.AttributeValueGet("left");
+				nLeft = sTMP.ToShort();
+				sTMP = cXmlNode.AttributeValueGet("y", false);
+				if (null == sTMP)
+					sTMP = cXmlNode.AttributeValueGet("top");
+				nTop = sTMP.ToShort();
 			}
 		}
 
@@ -54,11 +76,44 @@ namespace helpers
 		public Dock()
 			: this(Corner.upper_left, new Offset())
 		{ }
+		public void LoadXML(XmlNode cXmlNode)
+		{
+			XmlNode cNodeChild, cNodeOffset=null;
+			if (null != (cNodeChild = cXmlNode.NodeGet("dock", false)))
+			{
+				eCorner = (Dock.Corner)Enum.Parse(typeof(Dock.Corner), System.Text.RegularExpressions.Regex.Replace(cNodeChild.AttributeValueGet("corner").Trim(), "\\W", "_"), true);
+				cNodeOffset = cNodeChild.NodeGet("offset", false);
+			}
+			if (cNodeOffset != null || null!=(cNodeOffset = cXmlNode.NodeGet("offset", false)))
+				cOffset.LoadXML(cNodeOffset);
+		}
 	}
-	[Serializable]
+    [Serializable]
 	public struct Area
 	{
-		static public Area stEmpty
+        [Serializable]
+        public class Size
+        {
+            public ushort nWidth;
+            public ushort nHeight;
+            public Size(XmlNode cXmlNode)
+            {
+                LoadXML(cXmlNode);
+            }
+            public void LoadXML(XmlNode cXmlNode)
+            {
+                string sTMP;
+                sTMP = cXmlNode.AttributeValueGet("w", false);
+                if (null == sTMP)
+                    sTMP = cXmlNode.AttributeValueGet("width");
+                nWidth = sTMP.ToUShort();
+                sTMP = cXmlNode.AttributeValueGet("h", false);
+                if (null == sTMP)
+                    sTMP = cXmlNode.AttributeValueGet("height");
+                nHeight = sTMP.ToUShort();
+            }
+        }
+        static public Area stEmpty
 		{
 			get
 			{
@@ -109,7 +164,17 @@ namespace helpers
 		public Area(System.Drawing.Rectangle stRect)
 			: this((short)stRect.X, (short)stRect.Y, (ushort)stRect.Width, (ushort)stRect.Height)
 		{ }
-
+		public Area LoadXML(XmlNode cXmlNode)
+		{
+			XmlNode cNodeChild;
+			Area stRetVal = new Area(this.nLeft, this.nTop, 0, 0);
+			if (null != (cNodeChild = cXmlNode.NodeGet("size", false)))
+			{
+				stRetVal.nWidth = cNodeChild.AttributeGet<ushort>("width");
+				stRetVal.nHeight = cNodeChild.AttributeGet<ushort>("height");
+			}
+			return stRetVal;
+		}
 		#region operators&overrides
 		override public int GetHashCode()
 		{
@@ -133,7 +198,7 @@ namespace helpers
 		static public bool operator ==(Area stLeft, Area stRight)
 		{
 			bool bRetVal = false;
-			if (stLeft.nLeft == stRight.nLeft && stLeft.nRight == stRight.nRight && stLeft.nTop == stRight.nTop && stLeft.nBottom == stRight.nBottom)
+            if (stLeft.nLeft == stRight.nLeft && stLeft.nWidth == stRight.nWidth && stLeft.nTop == stRight.nTop && stLeft.nHeight == stRight.nHeight)
 				bRetVal = true;
 			return bRetVal;
 		}
@@ -175,15 +240,15 @@ namespace helpers
 			}
 			return stRetVal;
 		}
-		public void DockAccept(Dock cDock)
-		{
-			Area stAreaNew = Dock(this, cDock);
-			nLeft = stAreaNew.nLeft;
-			nRight = stAreaNew.nRight;
-		}
         public Area Dock(Area stBase, Dock cDock)
 		{
+			if (stBase.nWidth == 0 || stBase.nHeight == 0)
+				return this;
 			Area stRetVal = this;
+			if (cDock == null && (stRetVal.nLeft != 0 || stRetVal.nTop != 0))
+				cDock = new helpers.Dock(stRetVal.nLeft, stRetVal.nTop);
+			stRetVal.nLeft = 0;
+			stRetVal.nTop = 0;
 			if (null != cDock)
 			{
 				switch (cDock.eCorner)
@@ -205,21 +270,37 @@ namespace helpers
 						stRetVal.nTop = (short)(stBase.nHeight - nHeight);
 						break;
 					case helpers.Dock.Corner.center:
-						stRetVal.nLeft = (short)Math.Round((float)stBase.nWidth / 2 - (float)nWidth / 2);
-						stRetVal.nTop = (short)Math.Round((float)stBase.nHeight / 2 - (float)nHeight / 2);
+						stRetVal.nLeft = (short)Math.Round((float)(stBase.nWidth - nWidth) / 2);
+						stRetVal.nTop = (short)Math.Round((float)(stBase.nHeight - nHeight) / 2);
 						break;
+					case helpers.Dock.Corner.center_horizontal:
+						stRetVal.nLeft = (short)Math.Round((float)(stBase.nWidth - nWidth) / 2);
+						break;
+					case helpers.Dock.Corner.center_vertical:
+						stRetVal.nTop = (short)Math.Round((float)(stBase.nHeight - nHeight) / 2);
+						break;
+					case helpers.Dock.Corner.unknown:
+						return this;
 				}
-				stRetVal.nLeft += cDock.cOffset.nLeft;
-				stRetVal.nTop += cDock.cOffset.nTop;
+				stRetVal.nLeft += cDock.cOffset.nLeft; 
+				stRetVal.nTop += cDock.cOffset.nTop; 
 			}
 			return stRetVal;
 		}
 		public Area Move(short nLeft, short nTop)
 		{
-			Area stRetVal = this;
-			stRetVal.nLeft = nLeft;
-			stRetVal.nTop = nTop;
-			return stRetVal;
+            Area stRetVal = this;  // this при отдаче уже будет новым объектом, т.к. это не ссылочный тип данных
+            stRetVal.nLeft += nLeft;
+            stRetVal.nTop += nTop;
+            return stRetVal;
 		}
-	}
+        public Area Move(Dock.Offset cOffset)  
+        {
+            return Move(cOffset.nLeft, cOffset.nTop);
+        }
+        public override string ToString()
+        {
+            return "[("+nLeft+ ", " + nTop + ") " + nWidth + " x " + nHeight + "]";  // [(23, 0) 1288 x 312]
+        }
+    }
 }

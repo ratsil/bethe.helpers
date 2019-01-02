@@ -107,8 +107,8 @@ namespace helpers
                         {
                             if (cPreferences._dtFileWriteLast < File.GetLastWriteTime(cPreferences._sFile))
                             {
-                                (new Logger()).WriteWarning("reloading...");
-                                cPreferences._dtFileWriteLast = DateTime.Now;
+                                (new Logger()).WriteWarning("reloading...");  // будет работать только там, где _bInitialized учитывается, что он может быть true при LoadXML, например в Logger перегрузиться всё
+								cPreferences._dtFileWriteLast = DateTime.Now;
                                 cPreferences.LoadXML(cPreferences.NamespaceGet());
                             }
                         }
@@ -125,98 +125,5 @@ namespace helpers
                 }
             }
         }
-
-        //EMERGENCY l:нужно удалить все нижеследующие методы. а их вызовы заменить на соответствующие статические методы из helpers.extensions
-    /*
-		static protected XmlNode cXmlNode.NodeGet(string sName, XmlNode cParent, bool bThrow)
-		{
-			XmlNode cRetVal;
-			if (null == (cRetVal = cParent.SelectSingleNode(sName)) && bThrow)
-				throw new Exception("не указан раздел параметров [" + sName + "][" + cParent.Name + "]"); //TODO LANG
-			return cRetVal;
-		}
-        static protected XmlNode cXmlNode.NodeGet(string sName, XmlNode cParent)
-		{
-			return cXmlNode.NodeGet(sName, cParent, true);
-		}
-
-        static protected XmlNodeList cXmlNode.NodesGet(string sName, XmlNode cParent, bool bThrow)
-        {
-            XmlNodeList cRetVal;
-            if ((null == (cRetVal = cParent.SelectNodes(sName)) || 1 > cRetVal.Count) && bThrow)
-                throw new Exception("не указано ни одного раздела параметров [" + sName + "][" + cParent.Name + "]"); //TODO LANG
-            return cRetVal;
-        }
-        static protected XmlNodeList cXmlNode.NodesGet(string sName, XmlNode cParent)
-        {
-            return cXmlNode.NodesGet(sName, cParent, true);
-        }
-        static protected XmlNodeList cXmlNode.NodesGet(XmlNode cParent)
-        {
-            return cParent.ChildNodes;
-        }
-        static protected XmlNodeList cXmlNode.NodesGet(string sParentName, string sChildName, XmlNode cGrand, bool bThrow)
-        {
-            XmlNode cXmlNode = cXmlNode.NodeGet(sParentName, cGrand, bThrow);
-            if (null == cXmlNode)
-                return null;
-            return cXmlNode.NodesGet(sChildName, cXmlNode, bThrow);
-        }
-        static protected XmlNodeList cXmlNode.NodesGet(string sParentName, string sChildName, XmlNode cGrand)
-		{
-			return cXmlNode.NodesGet(sParentName, sChildName, cGrand, true);
-		}
-
-        static protected T cXmlNode.AttributeGet<T>(string sName, XmlNode cParent, bool bThrow)
-        {
-            T tRetVal;
-            string sValue = cXmlNode.AttributeValueGet(sName, cParent, bThrow);
-            try
-            {
-                tRetVal = sValue.To<T>();
-            }
-            catch
-            {
-                throw new Exception("указано некорректное свойство [" + sName + ":" + sValue + "][" + cParent.Name + "]"); //TODO LANG
-            }
-            return tRetVal;
-        }
-        static protected T cXmlNode.AttributeGet<T>(string sName, XmlNode cParent)
-		{
-			return cXmlNode.AttributeGet<T>(sName, cParent, true);
-		}
-
-        static protected string cXmlNode.AttributeValueGet(string sName, XmlNode cParent, bool bThrow)
-        {
-            string sRetVal = null;
-            if (null != cParent.Attributes[sName])
-                sRetVal = cParent.Attributes[sName].Value.Trim();
-            else if (bThrow)
-                throw new Exception("не указано свойство [" + sName + "][" + cParent.Name + "]"); //TODO LANG
-            return sRetVal;
-        }
-        static protected string cXmlNode.AttributeValueGet(string sName, XmlNode cParent)
-        {
-            return cXmlNode.AttributeValueGet(sName, cParent, true);
-        }
-        static protected long XmlAttributeIDGet(string sName, XmlNode cParent, bool bThrow)
-        {
-            long nRetVal;
-            string sValue = cXmlNode.AttributeValueGet(sName, cParent, bThrow);
-            try
-            {
-                nRetVal = sValue.ToID();
-            }
-            catch
-            {
-                throw new Exception("указано некорректное свойство [" + sName + ":" + sValue + "][" + cParent.Name + "]"); //TODO LANG
-            }
-            return nRetVal;
-        }
-        static protected long XmlAttributeIDGet(string sName, XmlNode cParent)
-		{
-			return XmlAttributeIDGet(sName, cParent, true);
-		}
-     * */
 	}
 }

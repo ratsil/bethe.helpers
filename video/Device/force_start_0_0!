@@ -1,0 +1,6 @@
+﻿if aja card doesn't started with such message (see device logs):
+
+"the aja card [0] or channel [NTV2_CHANNEL1] is in use. If you are absolutely shure about using this card and this channel - place force_start_0_0 file to the binary dir"
+
+rename and place this file to the device's root bin directory and card's channel will be refreshed on start. 
+naming rool: force_start_A_B , where A - device index, like in prefs, B - channel index, like in prefs. Indexes begins from 0.

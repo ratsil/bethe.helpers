@@ -477,8 +477,10 @@ namespace ffmpeg.net
         private IntPtr _pAVIOContext;
 		private bool _bMarshalOutNeeds;
 		private bool _bMarshalInNeeds;
+        private object _oDisposeLock;
+        private bool _bDisposed;
 
-		public uint nStreamsQty
+        public uint nStreamsQty
 		{
 			get
 			{
@@ -620,6 +622,7 @@ namespace ffmpeg.net
 
 		private AVFormatContext()
 		{
+            _oDisposeLock = new object();
 			_st = new AVFormatContextInternal();
 			_bMarshalOutNeeds = true;
 		}
@@ -658,16 +661,23 @@ namespace ffmpeg.net
 		}
 		public void Close()
 		{
-			//IntPtr pStream;
-			//AVStream stAVStream;
-			//for (int nIndx = 0; nIndx < nStreamsQty; nIndx++)
-			//{
-			//    pStream = Marshal.ReadIntPtr(_st.streams + (int)(nIndx * IntPtr.Size));
-			//    stAVStream = (AVStream)Marshal.PtrToStructure(pStream, typeof(AVStream));
-			//    Functions.av_free(stAVStream.codec);
-			//    Functions.av_free(pStream);
-			//}
-			if (NULL != _p)
+            lock (_oDisposeLock)
+            {
+                if (_bDisposed)
+                    return;
+                _bDisposed = true;
+            }
+
+            //IntPtr pStream;
+            //AVStream stAVStream;
+            //for (int nIndx = 0; nIndx < nStreamsQty; nIndx++)
+            //{
+            //    pStream = Marshal.ReadIntPtr(_st.streams + (int)(nIndx * IntPtr.Size));
+            //    stAVStream = (AVStream)Marshal.PtrToStructure(pStream, typeof(AVStream));
+            //    Functions.av_free(stAVStream.codec);
+            //    Functions.av_free(pStream);
+            //}
+            if (NULL != _p)
 			{
                 if (NULL != oformat)
                 {

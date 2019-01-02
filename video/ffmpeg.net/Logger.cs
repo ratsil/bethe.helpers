@@ -5,7 +5,7 @@ namespace ffmpeg.net
 {
     public class Logger : helpers.Logger
     {
-        static public Level eLevel = Level.debug2;
+        static public Level eLevel = Level.debug3;
 		
         public Logger()
             : base(eLevel, "ffmpeg")
@@ -15,6 +15,9 @@ namespace ffmpeg.net
 			public Timings(string sCategory)
 				: base(sCategory, eLevel)
 			{ }
-		}
+            public Timings(string sCategory, Level eLevelTimings)
+                : base(sCategory, eLevelTimings)
+            { }
+        }
     }
 }

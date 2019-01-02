@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<preferences>
+	<discomext merging_id="0" />
+	<helpers>
+		<pixelsmap>
+			<discom threads="12" />
+		</pixelsmap>
+		<common>
+			<logger level="debug1">
+			</logger>
+		</common>
+	</helpers>
+</preferences>

@@ -9,6 +9,8 @@ using System.Threading;
 using System.Xml;
 using helpers.extensions;
 using System.Net;
+using System.Diagnostics;
+using sio=System.IO;
 
 namespace helpers
 {
@@ -67,16 +69,10 @@ namespace helpers
 					cNodeChild = cXmlNode.NodeGet("common/database", false);
 				if (null == cNodeChild)
 					return;
+
 				if (null != cNodeChild.Attributes["server"])
-				{
-					_cDBCredentials = new DB.Credentials();
-					_cDBCredentials.sServer = cNodeChild.AttributeValueGet("server");
-					_cDBCredentials.nPort = cNodeChild.AttributeGet<int>("port");
-					_cDBCredentials.sDatabase = cNodeChild.AttributeValueGet("name");
-					_cDBCredentials.sUser = cNodeChild.AttributeValueGet("user");
-					_cDBCredentials.sPassword = cNodeChild.AttributeValueGet("password");
-					_cDBCredentials.nTimeout = cNodeChild.AttributeGet<int>("timeout");
-				}
+					_cDBCredentials = new DB.Credentials(cNodeChild);
+
 				if (null != cNodeChild.Attributes["bytea"])
 					_eByteaOutput = cNodeChild.AttributeGet<ByteaOutput>("bytea");
 			}
@@ -90,6 +86,57 @@ namespace helpers
 			public string sPassword;
 			public int nTimeout;
 			public string sRole;
+			public Credentials()
+			{ }
+			public Credentials(XmlNode cNode)
+			{
+				sServer = cNode.AttributeValueGet("server");
+				nPort = cNode.AttributeGet<int>("port");
+				sDatabase = cNode.AttributeValueGet("name");
+				sUser = cNode.AttributeValueGet("user");
+				sPassword = cNode.AttributeValueGet("password");
+				nTimeout = cNode.AttributeGet<int>("timeout");
+			}
+		}
+		public class BackUp
+		{
+			static public bool PgDump(string sPGBinPath, string sHostName, string sPort, string sDBName, string sUsername, string sFileOut, bool bGlobalsOnly, string sLoggerIn, out string sLogger)
+			{
+				string sExe = sio.Path.Combine(sPGBinPath, (bGlobalsOnly ? "pg_dumpall.exe" : "pg_dump.exe"));
+				if (!sio.File.Exists(sExe))
+					throw new Exception("file not found [" + sExe + "]");
+				string sArgs = bGlobalsOnly ?
+					"--host " + sHostName + " --port " + sPort + " --username " + sUsername + " --database postgres --no-password --verbose --file \"" + sFileOut + "\" --globals-only" :
+					"--host " + sHostName + " --port " + sPort + " --username " + sUsername + " --format plain --column-inserts --no-password --verbose --file \"" + sFileOut + "\" \"" + sDBName + "\"";
+
+				ProcessStartInfo cProcessStartInfo = new ProcessStartInfo()
+				{
+					CreateNoWindow = true,
+					WindowStyle = ProcessWindowStyle.Hidden,
+					UseShellExecute = false,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+					FileName = sExe,
+					Arguments = sArgs,
+				};
+
+				string sMessage = "";
+				sLogger = sLoggerIn + "------------------- BEGIN -------------------\n\n";
+				(new Logger("archive")).WriteNotice("pg_dump start [pgdump=" + cProcessStartInfo.FileName + "][args=" + cProcessStartInfo.Arguments + "]");
+				Process cProcess = Process.Start(cProcessStartInfo);
+				cProcess.PriorityClass = ProcessPriorityClass.Normal;
+				//string sErrorMessage = "";
+				cProcess.OutputDataReceived += (sender, args) => sMessage += args.Data + "\n";  // засирает поток и в итоге сильно замедляет работу
+				cProcess.ErrorDataReceived += (sender, args) => sMessage += args.Data + "\n";// cLogger.WriteNotice("error<br>", args.Data);
+				cProcess.BeginErrorReadLine();
+				//string sTMP = cProcess.StandardOutput.ReadToEnd();
+				cProcess.BeginOutputReadLine();
+				cProcess.WaitForExit();
+				bool bRetVal = true;
+				sLogger += sMessage + "\n\n------------------- END -------------------\n\n";
+				(new Logger("archive")).WriteNotice("pg_dump stop");
+				return bRetVal;
+			}
 		}
 
 		private object _oSyncRoot = new object();
@@ -98,7 +145,6 @@ namespace helpers
 		private bool _bTimeoutIncreased;
 		private NpgsqlConnection _cConnection = null;
 		private string _sLastQuery = "";
-		//private string _sLogfile = "c:/db.log";
 		private NpgsqlTransaction _cTransaction = null;
 		public string LastQuery
 		{
@@ -125,7 +171,6 @@ namespace helpers
 
 		public DB()
 		{
-			//_sLogfile = "c:/" + AppDomain.CurrentDomain.FriendlyName + "_DB.log";
 			_nTransactionStarts = 0;
 			_bTimeoutIncreased = false;
 			_sCache = "";
@@ -136,7 +181,11 @@ namespace helpers
 
 		private void Connect()
 		{
-			lock (_oSyncRoot)
+			//(new Logger()).WriteDebug("db.connect [timeout="+ _cCredentials.nTimeout + "]");
+			if (_cCredentials.nTimeout > 600)  //  1024 === MAXIMUM
+				_cCredentials.nTimeout = 600;
+
+            lock (_oSyncRoot)
 			{
 				if (null != _cTransaction)
 					return;
@@ -244,7 +293,8 @@ namespace helpers
 		}
 		public void CredentialsLoad()
 		{
-			CredentialsSet(Preferences.cDBCredentials);
+            (new Logger()).WriteDebug("CredentialsLoad - " + Preferences.cDBCredentials + "; " + Preferences.cDBCredentials.sServer + "; " + Preferences.cDBCredentials.nPort + "; " + Preferences.cDBCredentials.sDatabase + "; " + Preferences.cDBCredentials.sUser + "; " + Preferences.cDBCredentials.sRole); // + "; " + Preferences.cDBCredentials.sPassword
+            CredentialsSet(Preferences.cDBCredentials);
 		}
 		virtual public void CredentialsSet(Credentials cDBCredentials)
 		{
@@ -308,25 +358,27 @@ namespace helpers
 		}
 		private void PerformAsynsWorker(object cSQL)
 		{
+			int nTimeoutOld = -1;
 			try
 			{
-				int nTimeoutOld = -1;
 				if (!_bTimeoutIncreased)
 				{
 					_bTimeoutIncreased = true;
 					nTimeoutOld = _cCredentials.nTimeout;
 					_cCredentials.nTimeout *= 3;
+					if (_cCredentials.nTimeout > 600)  //  1024 === MAXIMUM
+						_cCredentials.nTimeout = 600;
 				}
 				Perform((string)cSQL);
-				if (0 < nTimeoutOld)
-				{
-					_cCredentials.nTimeout = nTimeoutOld;
-					_bTimeoutIncreased = false;
-				}
 			}
 			catch (Exception ex)
 			{
 				(new Logger()).WriteError(ex);
+			}
+			if (0 < nTimeoutOld)
+			{
+				_cCredentials.nTimeout = nTimeoutOld;
+				_bTimeoutIncreased = false;
 			}
 		}
 
