@@ -111,11 +111,9 @@ namespace BTL.Device
         private NTV2Card _cCard;
         private DeviceScanner.NTV2DeviceInfo cInfo;
         private int _nAudioQueueLength;
-        private ushort _nAudioChannelsQty; // can be only 6, 8, 16
         private uint _nDeviceIndex;
         private bool _bDoMultichannel;
         private bool _bDoWritingFrames;
-        private int _nFrameBufSize;
         private AjaInterop.NTV2VideoFormat? _eReferenceStatus = null;
         private bool? _bItsOk;
         private uint _nLogCounter2;
@@ -132,7 +130,7 @@ namespace BTL.Device
         {
             get
             {
-                (new Logger("Aja")).WriteDebug2("bCardStopped [bChannelStopped=" + _cCard.bChannelStopped + "][bChannelInitiated=" + _cCard.bChannelInitiated + "]");
+                (new Logger("Aja", sName)).WriteDebug2("bCardStopped [bChannelStopped=" + _cCard.bChannelStopped + "][bChannelInitiated=" + _cCard.bChannelInitiated + "]");
                 return (_cCard.bChannelStopped == null || _cCard.bChannelStopped == true) && (_cCard.bChannelInitiated == null || _cCard.bChannelInitiated == false);
             }
         }
@@ -142,21 +140,21 @@ namespace BTL.Device
             DeviceScanner cDScanner = new DeviceScanner();
             return (int)cDScanner.GetNumDevices();
         }
-        new static public Aja[] BoardsGet()
+        new static public Aja BoardGet(uint nIndex)
         {
-            (new Logger("Aja")).WriteDebug2("in");
+            (new Logger("Aja", null)).WriteDebug2("in");
             DeviceScanner cDScanner = new DeviceScanner();
-            List<Aja> aRetVal = new List<Aja>();
+            Aja cRetVal = null;
             uint nDevicesCount = cDScanner.GetNumDevices();
-            for (uint nI = 0; nI < nDevicesCount; nI++)
-            {
-                aRetVal.Add(new Aja(cDScanner.GetDeviceInfo(nI), nI));
-            }
-            (new Logger("Aja")).WriteDebug2("out");
-            return aRetVal.ToArray();
+            if (nIndex < nDevicesCount)
+                cRetVal = new Aja(cDScanner.GetDeviceInfo(nIndex), nIndex);
+
+            (new Logger("Aja", null)).WriteDebug2("out");
+            return cRetVal;
         }
 
         public Aja(DeviceScanner.NTV2DeviceInfo cDeviceInfo, uint nDeviceIndex)
+            :base("Aja-" + nDeviceIndex + "_")
         {
             try
             {
@@ -164,7 +162,7 @@ namespace BTL.Device
                 _nAudioQueueLength = 0;
                 _bDoMultichannel = true; // separate channels (if false, all channels provides one signal)
                 string sMessage = "aja card [devid=" + cDeviceInfo.stWrapper.deviceID + "][device_id=" + cDeviceInfo.deviceIdentifier + "][multiformat=" + cDeviceInfo.stWrapper.multiFormat + "][ins=" + cDeviceInfo.stWrapper.numVidInputs + "][outs=" + cDeviceInfo.stWrapper.numVidOutputs + "]";
-                if (Preferences.bDeviceInput)
+                if (bInput)
                 {
                     throw new Exception("aja input mode has not relized yet");
                 }
@@ -178,13 +176,13 @@ namespace BTL.Device
                     sMessage += "<br>\tsupported audio in sources:<br>\t\t" + cDeviceInfo.audioInSourceList.ToEnumerationString("<br>\t\t", "", null, null, true);
                     sMessage += "<br>\tsupported audio out sources:<br>\t\t" + cDeviceInfo.audioOutSourceList.ToEnumerationString("<br>\t\t", "", null, null, true);
                     sMessage += "<br>\tsupported audio sample rates:<br>\t\t" + cDeviceInfo.audioSampleRateList.ToEnumerationString("<br>\t\t", "", null, null, true);
-                    (new Logger("Aja")).WriteNotice(sMessage);
+                    (new Logger("Aja", sName)).WriteNotice(sMessage);
 
                     if (Preferences.bAudio)
                     {
-                        _nAudioChannelsQty = Preferences.nAudioChannelsQty;
+                        _nAudioChannelsQty = Preferences.nAudioChannelsQty;  // can be only 6, 8, 16
                         if (_nAudioChannelsQty != 6 && _nAudioChannelsQty != 8 && _nAudioChannelsQty != 16)
-                            throw new Exception("unsupported audio channels qty (only 6, 8, 16) [" + Preferences.nAudioChannelsQty + "]");
+                            throw new Exception("unsupported audio channels qty (only 6, 8, 16) [" + _nAudioChannelsQty + "]");
 
                         switch (Preferences.nAudioSamplesRate)
                         {
@@ -206,7 +204,7 @@ namespace BTL.Device
                     ushort nW, nH;
                     _cCard.GetActiveFrameDimensions(out nW, out nH);
                     stArea = new Area(0, 0, nW, nH);
-                    _nFrameBufSize = stArea.nWidth * stArea.nHeight * 4;
+                    _nVideoBytesQty = stArea.nWidth * stArea.nHeight * 4;
 
                     AjaInterop.NTV2FrameRate eFR;
                     switch (eFR = _cCard.GetCurrentFramrRate())
@@ -217,7 +215,12 @@ namespace BTL.Device
                         default:
                             throw new Exception("unsupported frame rate [" + eFR + "][video_format=" + _eVideoFormat + "]");
                     }
-
+                    if (Preferences.bAudio)
+                    {
+                        _nAudioBufferCapacity_InSamples = Preferences.nAudioSamplesPerFrame * Preferences.nQueueDeviceLength;
+                        _nChannelBytesQty = Preferences.nAudioSamplesPerFrame * Preferences.nAudioByteDepth;
+                        _nAudioBytesQty = _nAudioChannelsQty * _nChannelBytesQty;
+                    }
                     _AjaFramesBufferMaxCount = 3;
                     _AjaFramesVideoBuffer = new ThreadBufferQueue<Frame.Video>(_AjaFramesBufferMaxCount, true, true);
                     _AjaFramesVideoToDispose = new ThreadBufferQueue<Frame.Video>(false, false);
@@ -243,7 +246,7 @@ namespace BTL.Device
             }
             catch (Exception ex)
             {
-                (new Logger("Aja")).WriteError(ex);
+                (new Logger("Aja", sName)).WriteError(ex);
                 throw;
             }
         }
@@ -270,7 +273,7 @@ namespace BTL.Device
             }
             catch (Exception ex)
             {
-                (new Logger("Aja")).WriteError(ex);
+                (new Logger("Aja", sName)).WriteError(ex);
             }
             try
             {
@@ -290,14 +293,14 @@ namespace BTL.Device
             }
             catch (Exception ex)
             {
-                (new Logger("Aja")).WriteError(ex);
+                (new Logger("Aja", sName)).WriteError(ex);
             }
         }
         override public void TurnOn()
         {
-            if (Preferences.bDeviceInput)
+            if (bInput)
             {
-                throw new Exception("output mode has not realised yet");
+                throw new Exception("input mode has not realised yet");
             }
             else
             {
@@ -325,7 +328,7 @@ namespace BTL.Device
                 _cCard.Init();
             }
             base.TurnOn();
-            if (Preferences.bDeviceInput)
+            if (bInput)
             {
                 throw new Exception("output mode has not realised yet");
             }
@@ -334,7 +337,7 @@ namespace BTL.Device
                 _cCard.Run();
             }
 
-            (new Logger("Aja")).WriteNotice("aja turned on");
+            (new Logger("Aja", sName)).WriteNotice("aja turned on");
         }
         override public void DownStreamKeyer()
         {
@@ -346,8 +349,8 @@ namespace BTL.Device
             {
                 throw new Exception("not supported pixel format [" + _ePixelFormat + "][expected=" + AjaInterop.NTV2FrameBufferFormat.NTV2_FBF_ARGB + "]");
             }
-            Frame.Video cRetVal = new Frame.Video();
-            cRetVal.oFrameBytes = new Bytes() { aBytes = new byte[_stArea.nWidth * _stArea.nHeight * 4], nID = -1 };  // if problems - look at ntv2player.cc: mVideoBufferSize = GetVideoWriteSize (mVideoFormat, mPixelFormat, mVancEnabled, mWideVanc);
+            Frame.Video cRetVal = new Frame.Video(sName);
+            cRetVal.oFrameBytes = new Bytes() { aBytes = new byte[_nVideoBytesQty], nID = -1 };  // if problems - look at ntv2player.cc: mVideoBufferSize = GetVideoWriteSize (mVideoFormat, mPixelFormat, mVancEnabled, mWideVanc);
             return cRetVal;
         }
 
@@ -361,14 +364,15 @@ namespace BTL.Device
             Frame.Video cFrameVideo;
             _dtLastTimeFrameScheduleCalled = DateTime.Now;
 
-            AjaInterop.NTV2VideoFormat eCurrentRef = _cCard.eRefStatus;
+            AjaInterop.NTV2VideoFormat eCurrentRef;
 
-            while (true)
+            while (true) // puts frames up to max (_AjaFramesBufferMaxCount)
             {
+                eCurrentRef = _cCard.eRefStatus;
                 if (null == _eReferenceStatus || _eReferenceStatus != eCurrentRef)
                 {
                     _eReferenceStatus = eCurrentRef;
-                    (new Logger("Aja")).WriteWarning("Refference status has changed to: [" + eCurrentRef + "] (unknown status means 'no ref')");
+                    (new Logger("Aja", sName)).WriteWarning("Refference status has changed to: [" + eCurrentRef + "] (unknown status means 'no ref')");
                 }
 
                 cFrameAudio = AudioFrameGet();
@@ -379,14 +383,14 @@ namespace BTL.Device
                     || cFrameAudio.aFrameBytes.IsNullOrEmpty()
                     )
                 {
-                    (new Logger("Aja")).WriteError("audio frame is empty! [cFrameAudio=" + (cFrameAudio == null ? "NULL" : (null == cFrameAudio.aFrameBytes ? "bytes is NULL" : "" + cFrameAudio.aFrameBytes.Length)) + "]");
+                    (new Logger("Aja", sName)).WriteError("audio frame is empty! [cFrameAudio=" + (cFrameAudio == null ? "NULL" : (null == cFrameAudio.aFrameBytes ? "bytes is NULL" : "" + cFrameAudio.aFrameBytes.Length)) + "]");
                     break;
                 }
                 #endregion
                 #region video
                 if (null == (cFrameVideo) || cFrameVideo.aFrameBytes.IsNullOrEmpty())    // _nFPS + _nVideoBufferExtraCapacity < nVideoFramesBuffered
                 {
-                    (new Logger("Aja")).WriteDebug("got null instead of frame IN DECKLINK !!");
+                    (new Logger("Aja", sName)).WriteDebug("got null instead of frame IN DECKLINK !!");
                     break;
                 }
 
@@ -396,8 +400,8 @@ namespace BTL.Device
                 {
                     if (null != cFrameVideo)
                     {
-                        byte[] aBytes = new byte[_nFrameBufSize];
-                        System.Runtime.InteropServices.Marshal.Copy(cFrameVideo.pFrameBytes, aBytes, 0, (int)_nFrameBufSize);
+                        byte[] aBytes = new byte[_nVideoBytesQty];
+                        System.Runtime.InteropServices.Marshal.Copy(cFrameVideo.pFrameBytes, aBytes, 0, (int)_nVideoBytesQty);
                         lock (_aqWritingFrames)
                             _aqWritingFrames.Enqueue(aBytes);
                     }
@@ -425,20 +429,21 @@ namespace BTL.Device
                 if (
                         Preferences.nQueueDeviceLength - 2 > _nAudioQueueLength
                         || Preferences.nQueueDeviceLength - 2 > nVideoFramesBuffered
-                        || Preferences.nQueuePipeLength / 2 > base._nBufferFrameCount && 0 < base._nBufferFrameCount
+                        || Preferences.nQueuePipeLength * 4 / 5 > base._nBufferFrameCount && 0 < base._nBufferFrameCount
                         || _aq__PROBA__AudioFrames.Count > 2 || _aq__PROBA__VideoFrames.Count > 2
                     )
                 {
                     if (_bItsOk == true)
                     {
-                        (new Logger("Aja")).WriteError("device queue goes wrong-1:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered) + ")(" + n__PROBA__AudioFramesBuffered + "," + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc" + _nLogCounter2);
+                        (new Logger("Aja", sName)).WriteError("device queue goes wrong-1:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc-0");
                         _bItsOk = false;
                         _nLogCounter2 = 0;
                     }
                     else if (_nLogCounter2++ >= 200)
                     {
+                        (new Logger("Aja", sName)).WriteError("device queue goes wrong-2:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc-" + _nLogCounter2 + _sIterationsCounter2);
+                        _sIterationsCounter2 = _sIterationsCounter2 == "." ? ".." : ".";
                         _nLogCounter2 = 0;
-                        (new Logger("Aja")).WriteError("device queue goes wrong-2:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered) + ")(" + n__PROBA__AudioFramesBuffered + "," + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc" + _nLogCounter2);
                     }
                 }
                 else
@@ -449,11 +454,14 @@ namespace BTL.Device
                             _bItsOk = true;
                     }
                     else if (_bItsOk == false)
+                    {
+                        (new Logger("Aja", sName)).WriteError("device queue was wrong:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc-" + _nLogCounter2);
                         _bItsOk = true;
+                    }
 
                     if (_nLogCounter2++ >= 2000)
                     {
-                        (new Logger("Aja")).WriteNotice("device queue:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered) + ")(" + n__PROBA__AudioFramesBuffered + "," + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ")        " + _sIterationsCounter2);
+                        (new Logger("Aja", sName)).WriteNotice("device queue:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ")        " + _sIterationsCounter2);
                         _sIterationsCounter2 = _sIterationsCounter2 == "." ? ".." : ".";
                         _nLogCounter2 = 0;
                     }

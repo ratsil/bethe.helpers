@@ -192,7 +192,7 @@ namespace helpers
                 _bPauseFile = false;
             }
         }
-        public bool DoCopy(bool bResetLastWriteTime)  // with kernel32.dll  CopyFileEx   -- еле-еле обгоняет хронометраж на 10.100
+        public bool DoCopy(bool bResetLastWriteTime)  // with kernel32.dll  CopyFileEx   -- еле-еле обгоняет хронометраж на 10.100 (рейд без кэша), но быстрее docopy-2
         {
             DateTime dtStart = DateTime.Now;
             bool bRetVal = false;
@@ -352,8 +352,8 @@ namespace helpers
         private void DiffResultSet(DateTime dtStart)
         {
             _tsReal = DateTime.Now.Subtract(dtStart);
-            TimeSpan tsExpected = TimeSpan.FromMilliseconds(_nFramesDur * 40);
-            _tsDiff = _tsReal.Subtract(tsExpected);
+            TimeSpan tsMaxExpected = TimeSpan.FromMilliseconds(_nFramesDur * 40);
+            _tsDiff = _tsReal.Subtract(tsMaxExpected);
         }
         private void ReadWorker()
         {

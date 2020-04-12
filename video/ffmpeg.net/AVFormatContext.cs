@@ -501,6 +501,48 @@ namespace ffmpeg.net
 				return aRetVal;
 			}
 		}
+        private IntPtr metadata
+        {
+            get
+            {
+                MarshalOut();
+                return _st.metadata;
+            }
+        }
+        private AVMetadata? _stMetadata;
+        private AVMetadata stMetadata
+        {
+            get
+            {
+                if (_stMetadata != null)
+                    return _stMetadata.Value;
+                if (metadata == IntPtr.Zero)
+                    return new AVMetadata();
+                AVMetadata stRetVal = (AVMetadata)Marshal.PtrToStructure(metadata, typeof(AVMetadata));
+                _stMetadata = stRetVal;
+                return stRetVal;
+            }
+        }
+        private Dictionary<string, string> _ahMetadata;
+        public Dictionary<string, string> ahMetadata
+        {
+            get
+            {
+                if (_ahMetadata != null)
+                    return _ahMetadata;
+                if (stMetadata.elems == IntPtr.Zero)
+                    return null;
+                Dictionary<string, string> ahRetVal = new Dictionary<string, string>();
+                AVMetadataTag stTag;
+                for (int nIndx = 0; nIndx < stMetadata.count; nIndx++)
+                {
+                    stTag = (AVMetadataTag)Marshal.PtrToStructure(stMetadata.elems + (int)(nIndx * 2 * IntPtr.Size), typeof(AVMetadataTag));
+                    ahRetVal.Add(stTag.key, stTag.value);
+                }
+                _ahMetadata = ahRetVal;
+                return ahRetVal;
+            }
+        }
         public IntPtr iformat
         {
             get

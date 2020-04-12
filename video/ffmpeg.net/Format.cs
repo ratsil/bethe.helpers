@@ -304,7 +304,7 @@ namespace ffmpeg.net
                         _cFrame.nPTS = 0;
                     }
                     cFrameSource.nPTS = _cFrame.nPTS;
-                    nSize = Functions.avcodec_encode_video(cFormatVideoTarget.pAVCodecContext, _cFrame.aBuffer, _cFrame.nLengthBuffer, cFrameSource);
+                    nSize = Functions.avcodec_encode_video(cFormatVideoTarget.pAVCodecContext, _cFrame.aBuffer, _cFrame.nLengthBuffer, cFrameSource.pBytes);
 					if (0 > nSize)
 						throw new Exception("video encoding failed:" + nSize);
 					if (0 < nSize)

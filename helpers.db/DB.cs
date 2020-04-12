@@ -354,9 +354,9 @@ namespace helpers
 		}
 		public void PerformAsync(string sSQL)
 		{
-			ThreadPool.QueueUserWorkItem(PerformAsynsWorker, sSQL);
+			ThreadPool.QueueUserWorkItem(PerformAsyncWorker, sSQL);
 		}
-		private void PerformAsynsWorker(object cSQL)
+		private void PerformAsyncWorker(object cSQL)
 		{
 			int nTimeoutOld = -1;
 			try

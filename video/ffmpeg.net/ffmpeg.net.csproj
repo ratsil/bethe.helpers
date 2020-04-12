@@ -112,6 +112,7 @@
     <Compile Include="AVFormatContext.cs" />
     <Compile Include="AVFrame.cs" />
     <Compile Include="AVIOInterruptCB.cs" />
+    <Compile Include="AVMetadata.cs" />
     <Compile Include="AVOutputFormat.cs" />
     <Compile Include="AVPacket.cs" />
     <Compile Include="AVPicture.cs" />

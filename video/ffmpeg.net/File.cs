@@ -261,13 +261,13 @@ namespace ffmpeg.net
 			private Queue<Frame> _aqAudioFrames;
 			private Queue<Frame> _aqAudioFramesFree;
 
-			private static Dictionary<int, Queue<byte[]>> _ahBytesStorage; //DNF не забыть если удачно, то чистить его периодически!!!!
-			private static Dictionary<int, bool> _ahHashPassedOut;
-			private static List<int> _aBytesHashes;
-			private static int nNumSizes = 0, nNumTotal = 0, nHash;
-			private static long nBytesTotal = 0;
-			private static byte[] aBGRetVal;
-			private static byte[] BytesGet(int nSize, byte nFrom)
+            static private Dictionary<int, Queue<byte[]>> _ahBytesStorage; //DNF не забыть если удачно, то чистить его периодически!!!!
+			static private Dictionary<int, bool> _ahHashPassedOut;
+			static private List<int> _aBytesHashes;
+			static private int nNumSizes = 0, nNumTotal = 0, nHash;
+			static private long nBytesTotal = 0;
+			static private byte[] aBGRetVal;
+			static private byte[] BytesGet(int nSize, byte nFrom)
 			{
 				lock (_ahBytesStorage)
 				{
@@ -308,7 +308,7 @@ namespace ffmpeg.net
 					throw new Exception("bytes get is impossible");
 				}
 			}
-			private static void BytesBack(byte[] aBytes, byte nFrom)  
+			static private void BytesBack(byte[] aBytes, byte nFrom)  
 			{
 				if (null == aBytes)
 				{
@@ -329,8 +329,17 @@ namespace ffmpeg.net
 						(new Logger()).WriteDebug("ffmpeg.bytes error - received not our bytes!(from=" + nFrom + ") [hc=" + aBytes.GetHashCode() + "][size=" + aBytes.Length + "]");
 				}
 			}
-            private static int _nFreezeTimeoutTaskSeconds = 30;
-            private static int _nFreezeTimeoutPacketsGetSeconds = 20; // max 9 in real life
+            static private int _nFreezeTimeoutTaskSeconds;
+            static private int _nFreezeTimeoutPacketsGetSeconds; // 200MB block takes 0.5-1.5 sec normal. Max - 3 sec. If you have bad raid (etc) - you should change _nQueueFfmpegLength too
+            static private int nPreparedFramesMinimum = 20;
+            static public int nFreezeTimeoutPacketsGetSeconds
+            {
+                set
+                {
+                    _nFreezeTimeoutPacketsGetSeconds = value;
+                    _nFreezeTimeoutTaskSeconds = value + 10;
+                }
+            }
 
             private System.Threading.Thread _cThreadWritingFramesWorker;     //-!-make static?? -!-
 			private bool _bDoWritingFrames;
@@ -360,6 +369,7 @@ namespace ffmpeg.net
             private bool _bPacketsReadingSuccess;
             private int _nTotalPacketsQty;
 			private long _nTotalPacketsSize;
+            private long _nCurrentBlockSize;
             private PlaybackMode _eFramesGettingMode;
 			static private byte[] aBytesSilent;
 
@@ -418,7 +428,6 @@ namespace ffmpeg.net
 
 			public ulong nFramesQty { get; private set; }
 			public ushort nFramesPerSecond { get; private set; }
-			public TimeSpan tsTimeout;
 
 
 
@@ -444,7 +453,6 @@ namespace ffmpeg.net
 					_bFileEnd = false;
 					nFramesPerSecond = 25; //FPS
 
-					tsTimeout = TimeSpan.FromSeconds(8);
 					bCached = false;
                     bPrepared = false;
 
@@ -689,7 +697,7 @@ namespace ffmpeg.net
 					float nVideoDuration, nAudioDuration;
 					nVideoDuration = nAudioDuration = float.MaxValue;
 					AVMediaType eAVMediaType;
-					for (int nIndx = 0; nIndx < _cFormatCtx.nStreamsQty; nIndx++)
+                    for (int nIndx = 0; nIndx < _cFormatCtx.nStreamsQty; nIndx++)
 					{
 						stStream = _cFormatCtx.aStreams[nIndx];
 						stCodecCtx = (AVCodecContext)Marshal.PtrToStructure(stStream.codec, typeof(AVCodecContext));
@@ -763,22 +771,36 @@ namespace ffmpeg.net
 					throw;
 				}
 			}
-			public void Prepare(Format.Video cFormatVideo, Format.Audio cFormatAudio, PlaybackMode eFramesGettingMode)
+            public void Prepare(Format.Video cFormatVideo, Format.Audio cFormatAudio, PlaybackMode eFramesGettingMode)
 			{
 				_bDoWritingFrames = false;
 #if DEBUG
-				_aqWritingFrames = new Queue<byte[]>();
-				_aqWritingAudioFrames = new Queue<byte[]>();
-				_cThreadWritingFramesWorker = new System.Threading.Thread(WritingFramesWorker);
-				_cThreadWritingFramesWorker.IsBackground = true;
-				_cThreadWritingFramesWorker.Priority = System.Threading.ThreadPriority.Normal;
-				_cThreadWritingFramesWorker.Start();
+                if (_cFormatVideoTarget != null && sDebugFolder != null)
+                {
+                    _aqWritingFrames = new Queue<byte[]>();
+                    _aqWritingAudioFrames = new Queue<byte[]>();
+                    _cThreadWritingFramesWorker = new System.Threading.Thread(WritingFramesWorker);
+                    _cThreadWritingFramesWorker.IsBackground = true;
+                    _cThreadWritingFramesWorker.Priority = System.Threading.ThreadPriority.Normal;
+                    _cThreadWritingFramesWorker.Start();
+                }
 #endif
                 _eFramesGettingMode = eFramesGettingMode;
                 _cFormatVideoTarget = cFormatVideo;
 				_cFormatAudioTarget = cFormatAudio;
-				if (5 < nCacheSize)
-					_nDecodedFramesInPrepare = 5;
+                if (_cFormatVideoTarget == null)
+                {
+                    _aqVideoFrames = null;
+                    _aqVideoPackets = null;
+                }
+                if (cFormatAudio == null)
+                {
+                    _aqAudioFrames = null;
+                    _aqAudioPackets = null;
+                }
+
+                if (nPreparedFramesMinimum < nCacheSize)
+					_nDecodedFramesInPrepare = nPreparedFramesMinimum;
 				else
 					_nDecodedFramesInPrepare = nCacheSize;
 				//_nPreparedFramesIndx = _nDecodedFramesInPrepare;
@@ -1003,8 +1025,6 @@ namespace ffmpeg.net
                     _bAbortedPacketsGetGlobalAssync = true;
                     (new Logger()).WriteNotice("PacketsGetGlobalAssync: closed!! "); //logging
                 }
-
-
             }
             private static void StartThreadPacketsGetGlobalAssync()
             {
@@ -1057,7 +1077,7 @@ namespace ffmpeg.net
                                         else if (!cInput._bPacketsReadingDone && cInput._aqPackets.Count <= cInput._nMinQtyPackets)
                                         {
                                             cI = cInput;
-                                            sLog += "[packets-" + nIndx + "(" + nCount + ") = " + cI._aqPackets.Count + "(" + cI._nTotalPacketsQty + ")][total_size=" + cI._nTotalPacketsSize + "][data_packets=" + cI._nTotalDataAndOtherPackets + "][hc=" + cI.GetHashCode() + "]--\n\t\t";
+                                            sLog += "[packets-" + nIndx + "(" + nCount + ") = " + cI._aqPackets.Count + "(" + cI._nTotalPacketsQty + ")][tot_s=" + cI._nTotalPacketsSize + "][cur_bl_s=" + cI._nCurrentBlockSize + "][data_p=" + cI._nTotalDataAndOtherPackets + "][r_done=" + cI._bPacketsReadingDone + "][hc=" + cI.GetHashCode() + "]--\n\t\t";
                                             for (int nI = 0; nI < nCount; nI++)
                                                 sLog2 += " [i=" + nI + "][hc=" + _aInputsToPacketsRead[nI].GetHashCode() + "][p_now=" + _aInputsToPacketsRead[nI]._aqPackets.Count + "]";
                                             (new Logger()).WriteDebug2("PacketsGetGlobal: need to get packets for [i=" + nIndx + "][hc=" + cI.GetHashCode() + "][p_min=" + cInput._nMinQtyPackets + "]" + sLog2);
@@ -1110,7 +1130,7 @@ namespace ffmpeg.net
 
                                     if (!cI.bGotPacketsAssync) // т.е. повисли
                                     {
-                                        (new Logger()).WriteError("PacketsGetGlobal: packets_get_assync thread is freezing - will abort. [got_for_hc=" + cI.GetHashCode() + "][f=" + cI._sFile + "][_aqPackets=" + cI._aqPackets.Count() + "] " + sLog);
+                                        (new Logger()).WriteError("PacketsGetGlobal: packets_get_assync thread is freezing - will abort. [got_for_hc=" + cI.GetHashCode() + "][f=" + cI._sFile + "][_aqPackets=" + cI._aqPackets.Count() + "][r_done=" + cI._bPacketsReadingDone + "] " + sLog);
                                         cI._bFileEnd = true;
                                         aToDispose.Add(cI);
                                         lock (_oLockPacketsBlock)
@@ -1127,7 +1147,7 @@ namespace ffmpeg.net
                                 catch (Exception ex)
                                 {
                                     (new Logger()).WriteError(ex);
-                                    (new Logger()).WriteNotice("PacketsGetGlobal: error. [_aqPackets=" + (cI._aqPackets == null ? "NULL" : "" + cI._aqPackets.Count()) + "] " + sLog);
+                                    (new Logger()).WriteNotice("PacketsGetGlobal: error. [_aqPackets=" + (cI._aqPackets == null ? "NULL" : "" + cI._aqPackets.Count()) + "][total_s=" + cI._nTotalPacketsSize + "] " + sLog);
                                     cI._bFileEnd = true;
                                     aToDispose.Add(cI);
                                 }
@@ -1661,30 +1681,27 @@ namespace ffmpeg.net
                 if (!_bFrameGettingStarted) _bFrameGettingStarted = true;
                 Frame cRetVal = null;
                 _cTimingsFNVG.TotalRenew();
-				if (!_bFileEnd)
-				{
-					DateTime dtTimedOut = DateTime.MaxValue;
-					while (!_bFileEnd && 1 > _aqVideoFrames.Count)
+                if (!_bFileEnd && 1 > _aqVideoFrames.Count)
+                {
+                    if (_eFramesGettingMode == PlaybackMode.GivesFrameOnDemand)
                     {
-                        if (_eFramesGettingMode == PlaybackMode.GivesFrameOnDemand)
+                        if (!GetAndAddFrame() && _aqVideoFrames.Count <= 0)
                         {
-                            if (!GetAndAddFrame() && _aqVideoFrames.Count <= 0)
+                            if (bFileEndless)
+                                return null;
+                            if (_nPreparedFramesIndx < (int)nFramesQty)
                                 throw new TimeoutException("can't get next video frame 'on demand'");
-                            break;
+                            return null;
                         }
+                    }
+                    else
+                    {
                         if (bFileEndless)
-							return null;
-						if (DateTime.MaxValue == dtTimedOut)
-						{
-							dtTimedOut = DateTime.Now.Add(tsTimeout);
-                            (new Logger()).WriteWarning("frame:next:video: queue is empty!! will wait [timeout=" + tsTimeout.TotalSeconds + " s]");
-                        }
-						if (DateTime.Now > dtTimedOut)
-							throw new TimeoutException("video queue is empty");
-						System.Threading.Thread.Sleep(5);
-					}
-				}
-				_cTimingsFNVG.Restart("frame waiting");
+                            return null;
+                        throw new TimeoutException("video queue is empty");
+                    }
+                }
+                _cTimingsFNVG.Restart("frame waiting");
 				if (0 < _aqVideoFrames.Count)
 				{
 					lock (_aqVideoFrames)
@@ -1703,23 +1720,24 @@ namespace ffmpeg.net
 					return null;
 				Frame cRetVal = null;
 				Logger.Timings cTimings = new Logger.Timings("ffmpeg:file");
-				if (!_bFileEnd)
-				{
-					DateTime dtTimedOut = DateTime.MaxValue;
-					while (!_bFileEnd && 1 > _aqAudioFrames.Count)
-					{
-						if (bFileEndless)
-							return null;
-						if (DateTime.MaxValue == dtTimedOut)
-						{
-                            dtTimedOut = DateTime.Now.Add(tsTimeout);
-                            (new Logger()).WriteDebug("frame:next:audio: queue is empty!! will wait [timeout=" + tsTimeout.TotalSeconds + " s]");
+                if (!_bFileEnd && 1 > _aqAudioFrames.Count)
+                {
+                    if (_eFramesGettingMode == PlaybackMode.GivesFrameOnDemand)
+                    {
+                        if (!GetAndAddFrame() && _aqAudioFrames.Count <= 0)
+                        {
+                            if (bFileEndless)
+                                return null;
+                            throw new TimeoutException("can't get next audio frame 'on demand'");
                         }
-                        if (DateTime.Now > dtTimedOut)
-							throw new TimeoutException("audio queue is empty");
-						System.Threading.Thread.Sleep(5);
-					}
-				}
+                    }
+                    else
+                    {
+                        if (bFileEndless)
+                            return null;
+                        throw new TimeoutException("audio queue is empty");
+                    }
+                }
 				cTimings.Restart("frame waiting");
 				lock (_aqAudioFrames)
 				{
@@ -1780,7 +1798,7 @@ namespace ffmpeg.net
 						{
 							Functions.av_free_packet(pPacketNext);
 							Functions.av_freep(ref pPacketNext);
-							_aqVideoPackets.Dequeue();
+							_aqVideoPackets?.Dequeue();
 						}
 						_cTimingsPAD.Stop("1 packet", "free mem for packet", 40);
 					}
@@ -1833,13 +1851,13 @@ namespace ffmpeg.net
                             Functions.av_free_packet(pPacketNext);
                             Functions.av_freep(ref pPacketNext);
                         }
-                        int nDiff = (int)nFramesQty - _nPreparedFramesIndx - Math.Abs(_aqVideoFrames.Count - _aqAudioFrames.Count);
+                        int nDiff = (int)nFramesQty - _nPreparedFramesIndx - Math.Abs(_aqVideoFrames.Count - (_aqAudioFrames == null ? 0 : _aqAudioFrames.Count));
                         nDiff = Math.Abs(nDiff);
 
                         if (nDiff > 1 && nDiff <= 20) // несоответствие маленькое. При diff = -1 || 1 || 0  на практике кадры берутся все. Больше пока не встречалось - интересно посмотреть...
-                            (new Logger()).WriteWarning("file ended in wrong way [diff=" + nDiff + "][fq="+nFramesQty+ "][prep=" + _nPreparedFramesIndx + "][vidfr=" + _aqVideoFrames.Count + "][audfr=" + _aqAudioFrames.Count + "]"); //logging
+                            (new Logger()).WriteWarning("file ended in wrong way [diff=" + nDiff + "][fq="+nFramesQty+ "][prep=" + _nPreparedFramesIndx + "][vidfr=" + _aqVideoFrames.Count + "][audfr=" + _aqAudioFrames?.Count + "]"); //logging
                         else if (nDiff > 20) // большое
-                            (new Logger()).WriteError("file ended in wrong way [diff=" + nDiff + "][fq=" + nFramesQty + "][prep=" + _nPreparedFramesIndx + "][vidfr=" + _aqVideoFrames.Count + "][audfr=" + _aqAudioFrames.Count + "]"); //logging
+                            (new Logger()).WriteError("file ended in wrong way [diff=" + nDiff + "][fq=" + nFramesQty + "][prep=" + _nPreparedFramesIndx + "][vidfr=" + _aqVideoFrames.Count + "][audfr=" + _aqAudioFrames?.Count + "]"); //logging
                         throw new Exception("file ended in wrong way"); // плохого ничего не даёт
                     }
                     else
@@ -2103,7 +2121,7 @@ namespace ffmpeg.net
                     }
                     IntPtr pPacket;
                     int nResult;
-                    long nCurrentSize = 0;
+                    _nCurrentBlockSize = 0;
                     long nSleepSize = 0;
 
 
@@ -2141,15 +2159,17 @@ namespace ffmpeg.net
                                 if (_aPacket_size[0] > 0)
                                 {
                                     _nTotalPacketsSize += _aPacket_size[0];
-                                    nCurrentSize += _aPacket_size[0];
+                                    _nCurrentBlockSize += _aPacket_size[0];
                                     nSleepSize += _aPacket_size[0];
                                     _nTotalPacketsQty++;
                                     _aqPackets.Enqueue(pPacket);
+#if DEBUG
                                     //if (nSleepSize > 10000000)
                                     //{
                                     //	Thread.Sleep(1);
                                     //	nSleepSize = 0;
                                     //}
+#endif
                                 }
                                 _bPacketsReadingSuccess = true;
                             }
@@ -2169,7 +2189,7 @@ namespace ffmpeg.net
                                 _nMinQtyPackets = _nTotalPacketsQty / 2;
                             }
 
-                            if (nCurrentSize > nBlockSize)
+                            if (_nCurrentBlockSize > nBlockSize)
                             {
                                 break;
                             }
@@ -2215,12 +2235,12 @@ namespace ffmpeg.net
                             _aPacket_streamindex[0] = -1;
                         if (_nVideoStreamIndx == _aPacket_streamindex[0])   //stPacket.stream_index
                         {
-                            _aqVideoPackets.Enqueue(_pPacket);
+                            _aqVideoPackets?.Enqueue(_pPacket);
                             _nTotalVideoPackets++;
                         }
                         else if (_nAudioStreamIndx == _aPacket_streamindex[0])
                         {
-                            _aqAudioPackets.Enqueue(_pPacket);
+                            _aqAudioPackets?.Enqueue(_pPacket);
                             _nTotalAudioPackets++;
                         }
                         else
@@ -2422,7 +2442,7 @@ namespace ffmpeg.net
 
 					if (null != _cFormatVideo)
 					{
-						if (AVCodecID.CODEC_ID_H264 == cFormatVideo.eCodecID && (new string[] { "f4v", "flv", "f4f", "mpegts" }).Contains(sType))
+						if (AVCodecID.CODEC_ID_H264 == cFormatVideo.eCodecID && (new string[] { "f4v", "flv", "f4f", "mpegts", "mp4" }).Contains(sType))
 							_pBitStreamFilterVideo = Functions.av_bitstream_filter_init(new StringBuilder("h264_mp4toannexb"));
 						if (stAVOutputFormat.video_codec != _cFormatVideo.eCodecID)
 							stAVOutputFormat.video_codec = _cFormatVideo.eCodecID;
@@ -2650,7 +2670,13 @@ namespace ffmpeg.net
 		protected List<Frame> _aFramesLocked;
         private object _oDisposeLock;
         private bool _bDisposed;
-
+        public Dictionary<string, string> ahMetadata
+        {
+            get
+            {
+                return _cFormatCtx.ahMetadata;
+            }
+        }
 
         public Format.Video cFormatVideo
 		{

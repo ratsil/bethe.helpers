@@ -15,14 +15,14 @@ namespace BTL.Device
     {
         private static bool DoOnAppTerminaion(ConsoleTerminaion.CtrlType eSignal)
         {
-            (new Logger("main")).WriteNotice("External exiting console app due to external CTRL-C, or process kill, or shutdown [signal = " + eSignal + "]");
+            (new Logger("main", null)).WriteNotice("External exiting console app due to external CTRL-C, or process kill, or shutdown [signal = " + eSignal + "]");
             ConsoleTerminaion.exitSystem = true;
 
             while (!_cCurrentBoard.bCardStopped)
             {
                 System.Threading.Thread.Sleep(100);
             }
-            (new Logger("main")).WriteNotice("Cleanup complete");
+            (new Logger("main", null)).WriteNotice("Cleanup complete");
             System.Threading.Thread.Sleep(2000);
             Environment.Exit(-1);
             return true;
@@ -39,32 +39,28 @@ namespace BTL.Device
                     throw new System.IO.FileNotFoundException("файл конфигурации не найден [pid:" + nPID + "][" + BTL.Device.Preferences.sFile + "]");
                 BTL.Device.Preferences.Reload();
                 Logger.sPreferencesFile = BTL.Device.Preferences.sFile;
-                (new Logger("main")).WriteNotice("Begin");
+                (new Logger("main", null)).WriteNotice("Begin");
 
                 ConsoleTerminaion._handler += new ConsoleTerminaion.EventHandler(DoOnAppTerminaion);
                 ConsoleTerminaion.SetConsoleCtrlHandler(ConsoleTerminaion._handler, true);
 
-                (new Logger("main")).WriteNotice("файл конфигурации: [pid=" + nPID + "][board_target=" + BTL.Device.Preferences.nTargetDevice + "][file=" + BTL.Device.Preferences.sFile + "]");
+                (new Logger("main", null)).WriteNotice("файл конфигурации: [pid=" + nPID + "][board_target=" + BTL.Device.Preferences.nTargetDevice + "][file=" + BTL.Device.Preferences.sFile + "]");
 
-                Device[] aBoards = Device.BoardsGet();
-                string sLog = "boards found:";
+                Device cBoard = Device.BoardGet(Preferences.nTargetDevice);
+                string sLog = $"board found:{cBoard.sName}";
                 int nI = 0;
-                foreach (Device cD in aBoards)
-                {
-                    sLog += "<br>\t\t board " + nI++; // add more info
-                }
-                (new Logger("main")).WriteNotice(sLog);
+                (new Logger("main", null)).WriteNotice(sLog);
 
-                if (Preferences.nTargetDevice < 0 || Preferences.nTargetDevice >= aBoards.Length)
+                if (Preferences.nTargetDevice < 0 || cBoard == null)
                     throw new Exception("board number in prefs is wrong [nDeviceTarget = " + Preferences.nTargetDevice + "]");
 
-                _cCurrentBoard = aBoards[Preferences.nTargetDevice];
+                _cCurrentBoard = cBoard;
 
                 if (null == _cCurrentBoard)
                     throw new Exception("no target board");
                 _cCurrentBoard.PipeStart(Preferences.sDeviceMake + "-" + Preferences.nTargetDevice + "-" + Preferences.nTargetChannel);
 
-                (new Logger("main")).WriteNotice("device controller started");
+                (new Logger("main", null)).WriteNotice("device controller started");
                 while (!ConsoleTerminaion.exitSystem)
                 {
                     System.Threading.Thread.Sleep(1000);
@@ -72,11 +68,11 @@ namespace BTL.Device
             }
             catch (Exception ex)
             {
-                (new Logger("main")).WriteError(ex);
+                (new Logger("main", null)).WriteError(ex);
                 System.Threading.Thread.Sleep(3500);
             }
             finally{
-                (new Logger("main")).WriteNotice("device controller stopped");
+                (new Logger("main", null)).WriteNotice("device controller stopped");
                 if (_cCurrentBoard is Aja)
                 {
                     _cCurrentBoard.Dispose();

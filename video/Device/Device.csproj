@@ -24,6 +24,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>x64</PlatformTarget>
@@ -34,6 +35,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
@@ -62,6 +64,7 @@
     <Compile Include="Device.cs" />
     <Compile Include="Devices\Aja.cs" />
     <Compile Include="Devices\AjaWrapper.cs" />
+    <Compile Include="Devices\DecklinkFake.cs" />
     <Compile Include="Devices\Decklink.cs" />
     <Compile Include="Devices\Display.cs" />
     <Compile Include="IDevice.cs" />
@@ -69,6 +72,7 @@
     <Compile Include="Preferences.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="VancData.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

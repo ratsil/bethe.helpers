@@ -57,8 +57,7 @@ namespace BTL.Device
 		private IDeckLink _iDLDevice;
 		private IDeckLinkInput _iDLInput;
 		private IDeckLinkOutput _iDLOutput;
-		private IDeckLinkDisplayMode _iDLInputDisplayMode;
-		private IDeckLinkDisplayMode _iDLOutputDisplayMode;
+		private IDeckLinkDisplayMode _iDLDisplayMode;
 		private IDeckLinkKeyer _iDeckLinkKeyer;
 
         private IDeckLinkVideoConversion _iDLVideoConversion;
@@ -75,21 +74,26 @@ namespace BTL.Device
 		private _BMDAudioSampleRate _eAudioSampleRate;
 		private Dictionary<Frame.Video, IDeckLinkMutableVideoFrame> _ahFramesBuffersBinds;
 		private long _nVideoStreamTime;
-		private long _nAudioStreamTime;
+        private byte _nCurrentFrame_HH;
+        private byte _nCurrentFrame_MM;
+        private byte _nCurrentFrame_SS;
+        private byte _nCurrentFrame_FF;
+        private long _nAudioStreamTime;
         private int _nAudioQueueLength;
 		private uint _nLogCounter2;
         private bool? _bItsOk;
 		private string _sIterationsCounter2 = ".";
 		protected AudioBuffer _cAudioBuffer;
         private _BMDPixelFormat? _ePixelFormat;
-        private _BMDPixelFormat ePixelFormat
+        public _BMDPixelFormat ePixelFormat
         {
             get
             {
                 if (_ePixelFormat == null)
                 {
                     bool bFound;
-                    _ePixelFormat = Preferences.sPixelsFormat.ToEnumContainingString<_BMDPixelFormat>(_BMDPixelFormat.bmdFormat8BitBGRA, out bFound);
+                    _ePixelFormat = Preferences.sPixelsFormat.ToEnumEqualsString<_BMDPixelFormat>(_BMDPixelFormat.bmdFormat8BitBGRA, out bFound);
+                    bFound = true;
                     if (!bFound)
                         throw new Exception("incorrect pixels format in prefs: [" + Preferences.sPixelsFormat + "]"); //TODO LANG
                 }
@@ -100,9 +104,29 @@ namespace BTL.Device
                 //return DeckLinkAPI._BMDPixelFormat.bmdFormat8BitBGRA;
             }
         }
+        private _BMDPixelFormat? _ePixelFormatTarget;
+        private _BMDPixelFormat ePixelFormatTarget
+        {
+            get
+            {
+                if (_ePixelFormatTarget == null)
+                {
+                    if (Preferences.sPixelsFormatTarget == null)
+                        _ePixelFormatTarget = ePixelFormat;
+                    else
+                    {
+                        bool bFound;
+                        _ePixelFormatTarget = Preferences.sPixelsFormatTarget.ToEnumEqualsString<_BMDPixelFormat>(ePixelFormat, out bFound);
+                        bFound = true;
+                        if (!bFound && Preferences.sPixelsFormatTarget != null)
+                            throw new Exception("incorrect pixels format target in prefs: [" + Preferences.sPixelsFormatTarget + "]"); //TODO LANG
+                    }
+                }
+                return _ePixelFormatTarget.Value;
+            }
+        }
         private ushort _nTimescale;
 
-        int _nFrameBufSize;
 		private _BMDReferenceStatus? _eReferenceStatus = null;
         private bool _bStopped;
         override public bool bCardStopped 
@@ -118,6 +142,10 @@ namespace BTL.Device
         {
             int nRetVal = 0;
             IDeckLinkIterator cDeckLinkIterator = new CDeckLinkIterator();
+            IDeckLinkAPIInformation cInfo = (IDeckLinkAPIInformation)cDeckLinkIterator;
+            string sApiInfo;
+            cInfo.GetString(_BMDDeckLinkAPIInformationID.BMDDeckLinkAPIVersion, out sApiInfo);
+            (new Logger("DeckLink", null)).WriteNotice($"api ver = [BMDDeckLinkAPIVersion = {sApiInfo}]");
             if (null != cDeckLinkIterator)
             {
                 while (true)
@@ -129,197 +157,248 @@ namespace BTL.Device
                     nRetVal++;
                 }
             }
-            (new Logger("DeckLink")).WriteDebug3("boards.qty.get:out [" + nRetVal + "]");
+            (new Logger("DeckLink", null)).WriteDebug3("boards.qty.get:out [" + nRetVal + "]");
             return nRetVal;
         }
-        new static public Device[] BoardsGet()
+        new static public Device BoardGet(uint nIndex)
 		{
-			(new Logger("DeckLink")).WriteDebug3("in");
-			List<Device> aRetVal = new List<Device>();
+			(new Logger("DeckLink", null)).WriteDebug3("in");
+            Device cRetVal = null;
 			IDeckLinkIterator cDeckLinkIterator = new CDeckLinkIterator();
-			if (null != cDeckLinkIterator)
+            if (null != cDeckLinkIterator)
 			{
-				while (true)
+                uint nI = 0;
+                while (true)
 				{
-					(new Logger("DeckLink")).WriteDebug4("boards:get: next [brdsqty:" + aRetVal.Count + "]");
+					(new Logger("DeckLink", null)).WriteDebug4("boards:get: next [brdsqty:" + nI + "]");
 					IDeckLink cDeckLink;
-					(new Logger("DeckLink")).WriteDebug4("boards:get:iterator:before");
+					(new Logger("DeckLink", null)).WriteDebug4("boards:get:iterator:before");
 					cDeckLinkIterator.Next(out cDeckLink);
-					(new Logger("DeckLink")).WriteDebug4("boards:get:iterator:after");
+					(new Logger("DeckLink", null)).WriteDebug4("boards:get:iterator:after");
 					if (null == cDeckLink)
 						break;
-					aRetVal.Add(new Decklink(cDeckLink));
+                    if (nIndex == nI++)
+                    {
+                        cRetVal = new Decklink(cDeckLink, nIndex);
+                        break;
+                    }
 				}
 			}
-			(new Logger("DeckLink")).WriteDebug4("boards:get:device:out");
-			return aRetVal.ToArray();
+			(new Logger("DeckLink", null)).WriteDebug4("boards:get:device:out");
+			return cRetVal;
 		}
 
-		private Decklink(IDeckLink cDevice)
+		private Decklink(IDeckLink cDevice, uint nDeviceIndex)
+            :base("DeckLink-" + nDeviceIndex + "_")
 		{
-			(new Logger("DeckLink")).WriteDebug3("in");
+            (new Logger("DeckLink", sName)).WriteDebug3("in");
 			try
 			{
 				_ahFramesBuffersBinds = new Dictionary<Frame.Video, IDeckLinkMutableVideoFrame>();
 
 				_nAudioQueueLength = 0;
 				_iDLDevice = cDevice;
-				if(Preferences.bDeviceInput)
-					_iDLInput = (IDeckLinkInput)_iDLDevice;
-				else
-					_iDLOutput = (IDeckLinkOutput)_iDLDevice;
-
-				IDeckLinkDisplayModeIterator cDisplayModeIterator;
-				IDeckLinkDisplayMode cNextDLDisplayMode;
-				string sDisplayModeName = "";
+                IDeckLinkDisplayModeIterator cDisplayModeIterator;
+                IDeckLinkDisplayMode cNextDLDisplayMode;
+                _iDLDisplayMode = null;
+                string sDisplayModeName = "";
+                if (bInput)
+                {
+                    _iDLInput = (IDeckLinkInput)_iDLDevice;
+                    _iDLInput.GetDisplayModeIterator(out cDisplayModeIterator);
+                }
+                else
+                {
+                    _iDLOutput = (IDeckLinkOutput)_iDLDevice;
+                    _iDLOutput.GetDisplayModeIterator(out cDisplayModeIterator);
+                }
 
                 string sMessage = "decklink supported modes:<br>";
-				if (Preferences.bDeviceInput)
-				{
-					_iDLInputDisplayMode = null;
-					_iDLInput.GetDisplayModeIterator(out cDisplayModeIterator);
-					while (true)
-					{
-						cDisplayModeIterator.Next(out cNextDLDisplayMode);
-						if (cNextDLDisplayMode == null)
-							break;
-						cNextDLDisplayMode.GetName(out sDisplayModeName);
-						if (null == _iDLInputDisplayMode && sDisplayModeName.ToLower().Contains(Preferences.sVideoFormat))
-						{
-							sMessage += "selected:";
-							_iDLInputDisplayMode = cNextDLDisplayMode;
-						}
-						else
-							sMessage += "\t";
-						sMessage += sDisplayModeName + "<br>";
-					}
-					(new Logger("DeckLink")).WriteNotice(sMessage);
-					if (null == _iDLInputDisplayMode)
-						throw new Exception("can't find " + Preferences.sVideoFormat + " mode within specified device for input");
-				}
+                while (true)
+                {
+                    cDisplayModeIterator.Next(out cNextDLDisplayMode);
+                    if (cNextDLDisplayMode == null)
+                        break;
+                    cNextDLDisplayMode.GetName(out sDisplayModeName);
+                    if (null == _iDLDisplayMode && sDisplayModeName.ToLower().Contains(Preferences.sVideoFormat))
+                    {
+                        sMessage += "selected:";
+                        _iDLDisplayMode = cNextDLDisplayMode;
+                    }
+                    else
+                        sMessage += "\t";
+                    sMessage += sDisplayModeName + "<br>";
+                }
+                (new Logger("DeckLink", sName)).WriteNotice(sMessage);
+                if (null == _iDLDisplayMode)
+                    throw new Exception("can't find this mode [" + Preferences.sVideoFormat + "] within specified device");
+
+                sMessage = "";
+                foreach (_BMDPixelFormat ePF in Enum.GetValues(typeof(_BMDPixelFormat)))
+                    sMessage += "<br>\t\t" + ePF;
+                (new Logger("DeckLink", sName)).WriteNotice("\tSupported pixel formats:" + sMessage);
+
+                stArea = new Area(0, 0, (ushort)_iDLDisplayMode.GetWidth(), (ushort)_iDLDisplayMode.GetHeight());
+
+                long nFrameDuration, nFrameTimescale;
+                _iDLDisplayMode.GetFrameRate(out nFrameDuration, out nFrameTimescale);
+                nFPS = Preferences.nFPS = (ushort)((nFrameTimescale + (nFrameDuration - 1)) / nFrameDuration); //до ближайшего целого - взято из примера деклинка
+
+                _nRowBytesQty = 0;
+                switch (ePixelFormat)
+                {
+                    case _BMDPixelFormat.bmdFormat8BitBGRA:
+                    case _BMDPixelFormat.bmdFormat8BitARGB:
+                        _nRowBytesQty = stArea.nWidth * 4;
+                        break;
+                    case _BMDPixelFormat.bmdFormat8BitYUV:
+                        _nRowBytesQty = stArea.nWidth * 2;
+                        break;
+                    case _BMDPixelFormat.bmdFormat10BitYUV:
+                        _nRowBytesQty = ((stArea.nWidth + 47) / 48) * 128;
+                        break;
+                    case _BMDPixelFormat.bmdFormat10BitRGB:
+                        _nRowBytesQty = ((stArea.nWidth + 63) / 64) * 256;
+                        break;
+                }
+                _nVideoBytesQty = _nRowBytesQty * stArea.nHeight;
+                _aTmpUint = new uint[100];   // new uint[_nRowBytesQty / 4];    //  we use 42 words only (for teletext), but set 100.  _nRowBytesQty / 4 is max value. 
+
+                if (Preferences.bAudio)
+                {
+                    _nAudioChannelsQty = Preferences.nAudioChannelsQty;
+                    if (_nAudioChannelsQty != 2 && _nAudioChannelsQty != 8 && _nAudioChannelsQty != 16)
+                        throw new Exception($"Audio Channels must be either 2, 8 or 16. [ch_qty={_nAudioChannelsQty}]");
+                    switch (Preferences.nAudioBitDepth)
+                    {
+                        case 32:
+                            _eAudioSampleDepth = _BMDAudioSampleType.bmdAudioSampleType32bitInteger;
+                            break;
+                        case 16:
+                        default:
+                            _eAudioSampleDepth = _BMDAudioSampleType.bmdAudioSampleType16bitInteger;
+                            break;
+                    }
+                    switch (Preferences.nAudioSamplesRate)
+                    {
+                        case 48000:
+                            _eAudioSampleRate = _BMDAudioSampleRate.bmdAudioSampleRate48kHz;
+                            break;
+                        default:
+                            throw new Exception("unsupported audio sample rate [" + Preferences.nAudioSamplesRate + "]");
+                    }
+                    //_pAudioSamplesBuffer = Marshal.AllocCoTaskMem((int)_nAudioFrameSize_InBytes);
+                    _cAudioBuffer = new AudioBuffer();
+                    _nAudioBufferCapacity_InSamples = Preferences.nAudioSamplesPerFrame * Preferences.nQueueDeviceLength;
+                    _nChannelBytesQty = Preferences.nAudioSamplesPerFrame * Preferences.nAudioByteDepth;
+                    _nAudioBytesQty = _nAudioChannelsQty * _nChannelBytesQty;
+
+                    //for (int nIndx = 0; _nAudioFrameSize_InBytes > nIndx; nIndx++)
+                    //    Marshal.WriteByte(_pAudioSamplesBuffer, nIndx, 0);
+                    _nTimescale = (ushort)_eAudioSampleRate;
+                }
+
+                if (_iDLInput != null)
+                {
+                }
 				else
 				{
-					_iDLOutputDisplayMode = null;
-					_iDLOutput.GetDisplayModeIterator(out cDisplayModeIterator);
-					while (true)
-					{
-
-						cDisplayModeIterator.Next(out cNextDLDisplayMode);
-						if (cNextDLDisplayMode == null)
-							break;
-						cNextDLDisplayMode.GetName(out sDisplayModeName);
-						if (null == _iDLOutputDisplayMode && sDisplayModeName.ToLower().Contains(Preferences.sVideoFormat))
-						{
-							sMessage += "selected:";
-							_iDLOutputDisplayMode = cNextDLDisplayMode;
-						}
-						else
-							sMessage += "\t";
-						sMessage += sDisplayModeName + "<br>";
-                    }
-                    (new Logger("DeckLink")).WriteNotice(sMessage);
-
-                    sMessage = "";
-                    foreach (_BMDPixelFormat ePF in Enum.GetValues(typeof(_BMDPixelFormat)))
-                        sMessage += "<br>\t\t" + ePF;
-                    (new Logger("DeckLink")).WriteNotice("\tSupported pixel formats:" + sMessage);
-
-                    if (null == _iDLOutputDisplayMode)
-						throw new Exception("can't find " + Preferences.sVideoFormat + " mode within specified device for output");
-					stArea = new Area(0, 0, (ushort)_iDLOutputDisplayMode.GetWidth(), (ushort)_iDLOutputDisplayMode.GetHeight());
-
-					long nFrameDuration, nFrameTimescale;
-					_iDLOutputDisplayMode.GetFrameRate(out nFrameDuration, out nFrameTimescale);
-					Preferences.nFPS = (ushort)((nFrameTimescale + (nFrameDuration - 1)) / nFrameDuration); //до ближайшего целого - взято из примера деклинка
-
-                    if (Preferences.bAudio)
-					{
-						switch (Preferences.nAudioBitDepth)
-						{
-							case 32:
-								_eAudioSampleDepth = _BMDAudioSampleType.bmdAudioSampleType32bitInteger;
-								break;
-							case 16:
-							default:
-								_eAudioSampleDepth = _BMDAudioSampleType.bmdAudioSampleType16bitInteger;
-								break;
-						}
-						switch (Preferences.nAudioSamplesRate)
-						{
-							case 48000:
-								_eAudioSampleRate = _BMDAudioSampleRate.bmdAudioSampleRate48kHz;
-								break;
-							default:
-								throw new Exception("unsupported audio sample rate [" + Preferences.nAudioSamplesRate + "]");
-						}
-						//_pAudioSamplesBuffer = Marshal.AllocCoTaskMem((int)_nAudioFrameSize_InBytes);
-						_cAudioBuffer = new AudioBuffer();
-						_nAudioBufferCapacity_InSamples = Preferences.nAudioSamplesPerFrame * Preferences.nQueueDeviceLength;
-						//for (int nIndx = 0; _nAudioFrameSize_InBytes > nIndx; nIndx++)
-						//    Marshal.WriteByte(_pAudioSamplesBuffer, nIndx, 0);
-
-						_nTimescale = (ushort)_eAudioSampleRate;
-					}
 					if (null != Preferences.cDownStreamKeyer)
 					{
 						if (_iDLDevice is IDeckLinkKeyer)
 							_iDeckLinkKeyer = (IDeckLinkKeyer)_iDLDevice;
 						else
-							(new Logger("DeckLink")).WriteWarning("This device is not Keyer device. Don't use keyer in preferences");
+							(new Logger("DeckLink", sName)).WriteWarning("This device is not Keyer device. Don't use keyer in preferences");
 					}
 				}
-			}
-			catch (Exception ex)
+
+                // moved from turn on
+                if (_iDLInput != null)
+                {
+                    if (ePixelFormatTarget != ePixelFormat)
+                    {
+                        ((IDeckLinkOutput)_iDLDevice).CreateVideoFrame(stArea.nWidth, stArea.nHeight, _nRowBytesQty, ePixelFormat, _BMDFrameFlags.bmdFrameFlagDefault, out _iVideoFrameTarget);
+                        _iDLVideoConversion = new CDeckLinkVideoConversion();
+                    }
+                    _BMDDisplayMode eDM = _iDLDisplayMode.GetDisplayMode();
+                    _iDLInput.SetCallback(this);
+                    //_iDLInput.EnableVideoInput(eDM, _BMDPixelFormat.bmdFormat8BitYUV, _BMDVideoInputFlags.bmdVideoInputFlagDefault);
+                    _iDLInput.EnableVideoInput(eDM, ePixelFormatTarget, _BMDVideoInputFlags.bmdVideoInputFlagDefault);
+                    _iDLInput.EnableAudioInput(_eAudioSampleRate, _eAudioSampleDepth, _nAudioChannelsQty);
+                }
+                else
+                {
+                    //_ahFramesBuffersBinds = new Dictionary<Frame.Video, IDeckLinkMutableVideoFrame>();
+                    _aCurrentFramesIDs = new Dictionary<long, long>();
+                    _cStopWatch = System.Diagnostics.Stopwatch.StartNew();
+                    DownStreamKeyer();
+                    _iDLOutput.SetAudioCallback(this);
+                    _iDLOutput.SetScheduledFrameCompletionCallback(this);
+                    _BMDVideoOutputFlags eOutputFlag = _ePixelFormat == _BMDPixelFormat.bmdFormat10BitYUV ? (_BMDVideoOutputFlags.bmdVideoOutputFlagDefault | _BMDVideoOutputFlags.bmdVideoOutputVANC | _BMDVideoOutputFlags.bmdVideoOutputRP188) : _BMDVideoOutputFlags.bmdVideoOutputFlagDefault; // _BMDVideoOutputFlags.bmdVideoOutputFlagDefault | _BMDVideoOutputFlags.bmdVideoOutputVANC | 
+                    _iDLOutput.EnableVideoOutput(_iDLDisplayMode.GetDisplayMode(), eOutputFlag);
+                    _iDLOutput.EnableAudioOutput(_eAudioSampleRate, _eAudioSampleDepth, _nAudioChannelsQty, _BMDAudioOutputStreamType.bmdAudioOutputStreamContinuous);
+                }
+            }
+            catch (Exception ex)
 			{
-				(new Logger("DeckLink")).WriteError(ex);
+				(new Logger("DeckLink", sName)).WriteError(ex);
 				throw;
 			}
-			(new Logger("DeckLink")).WriteDebug4("return");
+			(new Logger("DeckLink", sName)).WriteDebug4("return");
 		}
 		~Decklink()
 		{
             Dispose();
 		}
         static object oLockDispose = new object();
-        static bool bDisposed = false;
-        new public void Dispose()
+        override public void Dispose()
         {
             lock (oLockDispose)
             {
-                if (bDisposed)
-                    return;
-                bDisposed = true;
-            }
-            try
-            {
-                if (null != _iDLOutput && _TurnedOn)  // иначе, если не TurnedOn, то error при StopScheduledPlayback
-                {
-                    long n;
-                    _iDLOutput.StopScheduledPlayback(0, out n, Preferences.nFPS);
-                    _iDLOutput.DisableAudioOutput();
-                    _iDLOutput.DisableVideoOutput();
-                    _ahFramesBuffersBinds.Clear();
-                    _aCurrentFramesIDs.Clear();
-                }
-            }
-            catch (Exception ex)
-            {
-                (new Logger("DeckLink")).WriteError(ex);
-            }
-            finally
-            {
                 try
                 {
-                    if (null != _cAudioBuffer)
-                        _cAudioBuffer.Dispose();
+                    if (null != _iDLOutput)
+                    {
+                        long n;
+                        if (_TurnedOn)
+                            _iDLOutput.StopScheduledPlayback(0, out n, Preferences.nFPS);
+                        _iDLOutput.DisableAudioOutput();
+                        _iDLOutput.DisableVideoOutput();
+                        _iDLOutput = null;
+                        _ahFramesBuffersBinds?.Clear();
+                        _aCurrentFramesIDs?.Clear();
+                    }
+                    if (null != _iDLInput)
+                    {
+                        if (_TurnedOn)
+                            _iDLInput.StopStreams();
+                        _iDLInput.DisableAudioInput();
+                        _iDLInput.DisableVideoInput();
+                        _iDLInput = null;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    (new Logger("DeckLink")).WriteError(ex);
+                    (new Logger("DeckLink", sName)).WriteError(ex);
                 }
                 finally
                 {
-                    _bStopped = true;
+                    try
+                    {
+                        if (null != _cAudioBuffer)
+                        {
+                            _cAudioBuffer.Dispose();
+                            _cAudioBuffer = null;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        (new Logger("DeckLink", sName)).WriteError(ex);
+                    }
+                    finally
+                    {
+                        _bStopped = true;
+                    }
                 }
             }
         }
@@ -328,52 +407,18 @@ namespace BTL.Device
 		{
 			_nVideoStreamTime = 0;
 			_nAudioStreamTime = 0;
-			if (Preferences.bDeviceInput)
-			{
-                if (_BMDPixelFormat.bmdFormat8BitYUV != ePixelFormat)
-                {
-                    int nWidth = _iDLInputDisplayMode.GetWidth(), nRowBytesQty = 0;
-                    switch (ePixelFormat)
-                    {
-                        case _BMDPixelFormat.bmdFormat8BitBGRA:
-                        case _BMDPixelFormat.bmdFormat8BitARGB:
-                        case _BMDPixelFormat.bmdFormat10BitRGB:
-                            nRowBytesQty = nWidth * 4;
-                            break;
-                        case _BMDPixelFormat.bmdFormat8BitYUV:
-                            nRowBytesQty = nWidth * 2;
-                            break;
-                        case _BMDPixelFormat.bmdFormat10BitYUV:
-                            nRowBytesQty = ((nWidth + 47) / 48) * 128;
-                            break;
-                    }
-                    ((IDeckLinkOutput)_iDLDevice).CreateVideoFrame(nWidth, _iDLInputDisplayMode.GetHeight(), nRowBytesQty, ePixelFormat, _BMDFrameFlags.bmdFrameFlagDefault, out _iVideoFrameTarget);
-                    _iDLVideoConversion = new CDeckLinkVideoConversion();
-                }
-                _iDLInput.EnableVideoInput(_iDLInputDisplayMode.GetDisplayMode(), _BMDPixelFormat.bmdFormat8BitYUV, _BMDVideoInputFlags.bmdVideoInputFlagDefault);
-                _iDLInput.EnableAudioInput(_BMDAudioSampleRate.bmdAudioSampleRate48kHz, _BMDAudioSampleType.bmdAudioSampleType16bitInteger, 2);
-                _iDLInput.SetCallback(this);
-
-			}
-			else
-			{
-				//_ahFramesBuffersBinds = new Dictionary<Frame.Video, IDeckLinkMutableVideoFrame>();
-				_aCurrentFramesIDs = new Dictionary<long, long>();
-				_cStopWatch = System.Diagnostics.Stopwatch.StartNew();
-				DownStreamKeyer();
-				_iDLOutput.SetAudioCallback(this);
-				_iDLOutput.SetScheduledFrameCompletionCallback(this);
-				_iDLOutput.EnableVideoOutput(_iDLOutputDisplayMode.GetDisplayMode(), _BMDVideoOutputFlags.bmdVideoOutputFlagDefault);
-				_iDLOutput.EnableAudioOutput(_eAudioSampleRate, _eAudioSampleDepth, Preferences.nAudioChannelsQty, _BMDAudioOutputStreamType.bmdAudioOutputStreamContinuous);
-			}
-			base.TurnOn();
-			if (Preferences.bDeviceInput)
+            _nCurrentFrame_HH = 0;
+            _nCurrentFrame_MM = 0;
+            _nCurrentFrame_SS = 0;
+            _nCurrentFrame_FF = 0;
+            base.TurnOn();
+			if (_iDLInput != null)
 				_iDLInput.StartStreams();
 			else
 				_iDLOutput.BeginAudioPreroll();
 
             _TurnedOn = true;
-            (new Logger("DeckLink")).WriteNotice("decklink turned on");
+            (new Logger("DeckLink", sName)).WriteNotice("decklink turned on");
 		}
 		override public void DownStreamKeyer()
 		{// external key =1;  internal key =0
@@ -382,36 +427,46 @@ namespace BTL.Device
 			{
 				_iDeckLinkKeyer.Enable(Preferences.cDownStreamKeyer.bInternal ? 0 : 1);
 				_iDeckLinkKeyer.SetLevel(Preferences.cDownStreamKeyer.nLevel);
-				(new Logger("DeckLink")).WriteNotice("keyer enabled [" + Preferences.cDownStreamKeyer.bInternal + "][" + Preferences.cDownStreamKeyer.nLevel + "]");
+				(new Logger("DeckLink", sName)).WriteNotice("keyer enabled [" + Preferences.cDownStreamKeyer.bInternal + "][" + Preferences.cDownStreamKeyer.nLevel + "]");
 			}
 			else
 			{
 				//_iDeckLinkKeyer.Disable();
-				(new Logger("DeckLink")).WriteNotice("keyer disabled");
+				(new Logger("DeckLink", sName)).WriteNotice("keyer disabled");
 			}
 		}
 		override protected Frame.Video FrameBufferPrepare()
 		{
 			IDeckLinkMutableVideoFrame cVideoFrame;
-			Frame.Video oRetVal = new Frame.Video();
+            Frame.Video oRetVal = new Frame.Video(sName);
 			IntPtr pBuffer;
-            (new Logger("DeckLink")).WriteNotice("!!!!!:" + stArea.nWidth + ":" + stArea.nHeight + ":" + stArea.nWidth * 4 + ":" + ePixelFormat);
-			_iDLOutput.CreateVideoFrame(stArea.nWidth, stArea.nHeight, stArea.nWidth * 4, ePixelFormat, _BMDFrameFlags.bmdFrameFlagDefault, out cVideoFrame);
-			_nFrameBufSize = stArea.nWidth * stArea.nHeight * 4;
+            (new Logger("DeckLink", sName)).WriteNotice("!!!!!:" + stArea.nWidth + ":" + stArea.nHeight + ":" + _nRowBytesQty + ":" + ePixelFormat);
+			_iDLOutput.CreateVideoFrame(stArea.nWidth, stArea.nHeight, _nRowBytesQty, ePixelFormat, _BMDFrameFlags.bmdFrameFlagDefault, out cVideoFrame);
+            if (ePixelFormat == _BMDPixelFormat.bmdFormat10BitYUV)
+            {
+                IDeckLinkVideoFrameAncillary cVFA; // for adding VANC data
+                _iDLOutput.CreateAncillaryData(ePixelFormat, out cVFA);
+                if (cVFA != null)
+                {
+                    if (cVideoFrame != null)
+                        cVideoFrame.SetAncillaryData(cVFA);
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(cVFA);
+                }
+            }
 			cVideoFrame.GetBytes(out pBuffer);
 			if (IntPtr.Zero != pBuffer)
 			{
 				lock (_ahFramesBuffersBinds)
 				{
 					if (_ahFramesBuffersBinds.Values.Contains(cVideoFrame))   // проверить было ли вообще такое!!!!
-						(new Logger("DeckLink")).WriteError(new Exception("TRYING TO INSERT FRAME [type = IDeckLinkMutableVideoFrame] INTO _ahFramesBuffersBinds, THAT ALREADY EXISTS THERE!"));
+						(new Logger("DeckLink", sName)).WriteError(new Exception("TRYING TO INSERT FRAME [type = IDeckLinkMutableVideoFrame] INTO _ahFramesBuffersBinds, THAT ALREADY EXISTS THERE!"));
 					_ahFramesBuffersBinds.Add(oRetVal, cVideoFrame);
 				}
 				oRetVal.oFrameBytes = pBuffer;
-				(new Logger("DeckLink")).WriteNotice("new decklink video frame was created. [count=" + _ahFramesBuffersBinds.Count + "]");
+				(new Logger("DeckLink", sName)).WriteNotice("new decklink video frame was created. [count=" + _ahFramesBuffersBinds.Count + "]");
 			}
 			else
-				(new Logger("DeckLink")).WriteError(new Exception("CREATE VIDEOFRAME RETURNED NULL!"));
+				(new Logger("DeckLink", sName)).WriteError(new Exception("CREATE VIDEOFRAME RETURNED NULL!"));
 			return oRetVal;
 		}
 		private byte[] VolumeChange(byte[] aIn)
@@ -456,7 +511,7 @@ namespace BTL.Device
 			if (null == _eReferenceStatus || _eReferenceStatus != eCurrentRef)
 			{
 				_eReferenceStatus = eCurrentRef;
-				(new Logger("DeckLink")).WriteWarning("Refference status has changed to: [" + eCurrentRef + "]");
+				(new Logger("DeckLink", sName)).WriteWarning("Refference status has changed to: [" + eCurrentRef + "]");
 			}
 
 			#region audio
@@ -501,7 +556,7 @@ namespace BTL.Device
 
 					_cAudioBuffer.Write(VolumeChange(cFrameAudio.aFrameBytes.aBytes));
 					if (Preferences.nAudioBytesPerFrame != cFrameAudio.aFrameBytes.Length)
-						(new Logger("DeckLink")).WriteWarning("wrong audio buffer length: " + cFrameAudio.aFrameBytes.Length + " bytes. expecting " + Preferences.nAudioBytesPerFrame + " bytes.");
+						(new Logger("DeckLink", sName)).WriteWarning("wrong audio buffer length: " + cFrameAudio.aFrameBytes.Length + " bytes. expecting " + Preferences.nAudioBytesPerFrame + " bytes.");
 					cFrameAudio.Dispose();
 
 					//BTL.Baetylus.nAudioStreamTime = cFrameAudio.nID;  //отладка
@@ -528,7 +583,7 @@ namespace BTL.Device
 			}
 			catch (Exception ex)
 			{
-				(new Logger("DeckLink")).WriteError(ex);
+				(new Logger("DeckLink", sName)).WriteError(ex);
 			}
 
 			// bug
@@ -546,7 +601,7 @@ namespace BTL.Device
 
 					if (null == (cFrameVideo = VideoFrameGet()) || IntPtr.Zero == cFrameVideo.pFrameBytes)    // _nFPS + _nVideoBufferExtraCapacity < nVideoFramesBuffered
 					{
-						(new Logger("DeckLink")).WriteDebug("got null instead of frame IN DECKLINK !!");
+						(new Logger("DeckLink", sName)).WriteDebug("got null instead of frame IN DECKLINK !!");
 						break;
 					}
 
@@ -570,7 +625,7 @@ namespace BTL.Device
 					{
 						if (!_ahFramesBuffersBinds.ContainsKey(cFrameVideo))
 						{
-							(new Logger("DeckLink")).WriteError(new Exception("полученный видео буфер не зарегистрирован [" + cFrameVideo.pFrameBytes.ToInt64() + "]"));
+							(new Logger("DeckLink", sName)).WriteError(new Exception("полученный видео буфер не зарегистрирован [" + cFrameVideo.pFrameBytes.ToInt64() + "]"));
 							continue;
 						}
 
@@ -580,80 +635,156 @@ namespace BTL.Device
 
 						if (!Device._aCurrentFramesIDs.ContainsKey(cFrameVideo.nID))
 						{
-							(new Logger("DeckLink")).WriteDebug4("frame " + cFrameVideo.nID + " was added");
+							(new Logger("DeckLink", sName)).WriteDebug4("frame " + cFrameVideo.nID + " was added");
 							Device._aCurrentFramesIDs.Add(cFrameVideo.nID, _cStopWatch.ElapsedMilliseconds);
 						}
 						else if (0 < cFrameVideo.nID && _cVideoFrameEmpty.nID!= cFrameVideo.nID)  // && 0 < Baetylus.nVideoBufferCount
-							(new Logger("DeckLink")).WriteDebug("VERY STRANGE - 2   error  [id=" + cFrameVideo.nID + "]");
+							(new Logger("DeckLink", sName)).WriteDebug("VERY STRANGE - 2   error  [id=" + cFrameVideo.nID + "]");
 
-						_iDLOutput.ScheduleVideoFrame(_ahFramesBuffersBinds[cFrameVideo], _nVideoStreamTime++, 1, Preferences.nFPS);  //  nVideoStreamTime + _nFramesRecovered
-					}
-					bVideoAdded = true;
+
+
+
+                        // new method:
+                        ////Guid cG = Guid.Parse("sdfdsfds-sdfds-sdffs-dfdsd-sdfds"); // типа такого - не совсем понял где брать гуид этот
+                        //IDeckLinkMutableVideoFrame cMVF = _ahFramesBuffersBinds[cFrameVideo];
+                        //IDeckLinkVideoFrameAncillaryPackets cVFAP = (IDeckLinkVideoFrameAncillaryPackets)cMVF;
+                        ////Marshal.QueryInterface(cMVF, ref cG, out cVFAP);  // получили пакеты   (довольно замороченно, поэтому, хуячу старым способом, см. ниже)
+                        //IntPtr pData;
+                        //uint nSize;
+                        //IDeckLinkAncillaryPacket cAP;
+                        //cVFAP.GetFirstPacketByID(0x61, 0x1, out cAP);
+                        //cVFAP.DetachPacket(cAP);
+                        //cAP = null; // создаём пакетег (см пример в closed capture в версии 11.4)
+                        //////cAP.GetBytes(_BMDAncillaryPacketFormat.bmdAncillaryPacketFormatUInt8, out pData, out nSize);
+                        ////// ????  что-то налили в pData  (или новый пакет создали и налили туда...)...
+                        //cVFAP.AttachPacket(cAP);
+                        // и пихаем cMVF в ScheduleVideoFrame
+
+
+
+                        // old method:
+                        IDeckLinkMutableVideoFrame cMVF = _ahFramesBuffersBinds[cFrameVideo];
+
+                        // VITC  (_BMDVideoOutputFlags.bmdVideoOutputRP188)    // example is here:  C:\Users\vakhlamovv\Downloads\DeckLink\Blackmagic DeckLink SDK 10.8.6\Examples\RP188VitcOutput.cpp
+                        //cMVF.SetTimecodeFromComponents(_BMDTimecodeFormat.bmdTimecodeRP188VITC1, _nCurrentFrame_HH, _nCurrentFrame_MM, _nCurrentFrame_SS, _nCurrentFrame_FF, _BMDTimecodeFlags.bmdTimecodeFlagDefault);
+                        //cMVF.SetTimecodeFromComponents(_BMDTimecodeFormat.bmdTimecodeRP188VITC2, _nCurrentFrame_HH, _nCurrentFrame_MM, _nCurrentFrame_SS, _nCurrentFrame_FF, _BMDTimecodeFlags.bmdTimecodeFlagDefault | _BMDTimecodeFlags.bmdTimecodeFieldMark); // if not progressive
+
+                        IDeckLinkVideoFrameAncillary cVFA = null;
+                        if (_ePixelFormat == _BMDPixelFormat.bmdFormat10BitYUV)
+                        {
+                            cMVF.SetTimecodeFromComponents(_BMDTimecodeFormat.bmdTimecodeRP188LTC, _nCurrentFrame_HH, _nCurrentFrame_MM, _nCurrentFrame_SS, _nCurrentFrame_FF, _BMDTimecodeFlags.bmdTimecodeFlagDefault); //  no examples((
+                            cMVF.SetTimecodeFromComponents(_BMDTimecodeFormat.bmdTimecodeRP188VITC1, _nCurrentFrame_HH, _nCurrentFrame_MM, _nCurrentFrame_SS, _nCurrentFrame_FF, _BMDTimecodeFlags.bmdTimecodeFlagDefault); //  no examples((
+                            cMVF.SetTimecodeFromComponents(_BMDTimecodeFormat.bmdTimecodeRP188VITC2, _nCurrentFrame_HH, _nCurrentFrame_MM, _nCurrentFrame_SS, _nCurrentFrame_FF, _BMDTimecodeFlags.bmdTimecodeFlagDefault | _BMDTimecodeFlags.bmdTimecodeFieldMark); //  no examples((
+
+                            if (!cFrameVideo.ahVancDataLine_Bytes.IsNullOrEmpty())
+                            {
+                                try
+                                {
+                                    cMVF.GetAncillaryData(out cVFA);
+                                    IntPtr pData;
+                                    foreach (uint nLine in cFrameVideo.ahVancDataLine_Bytes.Keys)
+                                    {
+                                        cVFA.GetBufferForVerticalBlankingLine(nLine, out pData);
+                                        VancData.Clear(_aTmpUint);
+                                        VancData.Set(_aTmpUint, cFrameVideo.ahVancDataLine_Bytes[nLine].aBytes);
+                                        VancData.CopyUintArrayToPointer(_aTmpUint, pData, _aTmpUint.Length);
+                                        //VancData.Get(pData, nLine, sName);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    (new Logger("DeckLink", sName)).WriteError(ex);
+                                }
+                            }
+                            IncrementTimecode();
+                        }
+                        _iDLOutput.ScheduleVideoFrame(cMVF, _nVideoStreamTime++, 1, Preferences.nFPS);    //  nVideoStreamTime + _nFramesRecovered   // ScheduleVideoFrame(videoFrame, gTotalFramesScheduled*kFrameDuration, kFrameDuration, kTimeScale)
+                        if (cVFA != null)
+                            System.Runtime.InteropServices.Marshal.ReleaseComObject(cVFA);
+                    }
+                    bVideoAdded = true;
 					n__PROBA__AudioFramesBuffered = _nAudioQueueLength;
 					n__PROBA__VideoFramesBuffered = (int)nVideoFramesBuffered + 1;
 
-					#region logging
-					if (
-							Preferences.nQueueDeviceLength - 2 > _nAudioQueueLength
-							|| Preferences.nQueueDeviceLength - 2 > nVideoFramesBuffered + 1
-							|| Preferences.nQueuePipeLength - 2 > base._nBufferFrameCount && 0 < base._nBufferFrameCount
-							|| _aq__PROBA__AudioFrames.Count > 2 || _aq__PROBA__VideoFrames.Count > 2
-						)
-					{
+                    #region logging
+                    if (
+                            Preferences.nQueueDeviceLength - 2 > _nAudioQueueLength
+                            || Preferences.nQueueDeviceLength - 2 > nVideoFramesBuffered + 1
+                            || Preferences.nQueuePipeLength * 4 / 5 > base._nBufferFrameCount && 0 < base._nBufferFrameCount
+                            || _aq__PROBA__AudioFrames.Count > 2 || _aq__PROBA__VideoFrames.Count > 2
+                        )
+                    {
                         if (_bItsOk == true)
                         {
-                            (new Logger("DeckLink")).WriteError("device queue goes wrong-1:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc" + _nLogCounter2);
+                            (new Logger("DeckLink", sName)).WriteError("device queue goes wrong-1:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc-0");
                             _bItsOk = false;
                             _nLogCounter2 = 0;
                         }
                         else if (_nLogCounter2++ >= 200)
                         {
+                            (new Logger("DeckLink", sName)).WriteError("device queue goes wrong-2:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc-" + _nLogCounter2 + _sIterationsCounter2);
+                            _sIterationsCounter2 = _sIterationsCounter2 == "." ? ".." : ".";
                             _nLogCounter2 = 0;
-                            (new Logger("DeckLink")).WriteError("device queue goes wrong-2:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc" + _nLogCounter2);
+
                         }
                     }
-					else
-					{
+                    else
+                    {
                         if (_bItsOk == null)
                         {
                             if (_nLogCounter2 >= 150)
                                 _bItsOk = true;
                         }
                         else if (_bItsOk == false)
+                        {
+                            (new Logger("DeckLink", sName)).WriteError("device queue was wrong:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ") -- logc-" + _nLogCounter2);
                             _bItsOk = true;
-
-                        if (_nLogCounter2++ >= 2000)  
-						{
-							(new Logger("DeckLink")).WriteNotice("device queue:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ")        " + _sIterationsCounter2);
-							_sIterationsCounter2 = _sIterationsCounter2 == "." ? ".." : ".";
-							_nLogCounter2 = 0;
                         }
-					}
 
-					//if (Preferences.nQueueBaetylusLength - 4 >= Baetylus.nVideoBufferCount && 0 < Baetylus.nVideoBufferCount)
-					//	nLogCounter = 3000;
-					//else
-					//{
-					//	if (nLogCounter++ >= 3000)
-					//	{
-					//		(new Logger("DeckLink")).WriteNotice("device queue:(" + nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ") baetylus buffer:" + Baetylus.nVideoBufferCount + " internal buffer:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ")        " + nIterationsCounter++);
-					//		nIterationsCounter = nIterationsCounter > 1 ? 0 : nIterationsCounter;
-					//		nLogCounter = 0;
-					//	}
-					//}
-					#endregion
-					break;
+                        if (_nLogCounter2++ >= 2000)
+                        {
+                            (new Logger("DeckLink", sName)).WriteNotice("device queue:(" + _nAudioQueueLength + ", " + (nVideoFramesBuffered + 1) + ")(" + n__PROBA__AudioFramesBuffered + ", " + n__PROBA__VideoFramesBuffered + ") dev buffer:" + base._nBufferFrameCount + " internal buffer_av:(" + _aq__PROBA__AudioFrames.Count + ", " + _aq__PROBA__VideoFrames.Count + ")        " + _sIterationsCounter2);
+                            _sIterationsCounter2 = _sIterationsCounter2 == "." ? ".." : ".";
+                            _nLogCounter2 = 0;
+                        }
+                    }
+                    #endregion
+                    break;
 				}
 			}
 			catch (Exception ex)
 			{
-				(new Logger("DeckLink")).WriteError(ex);
+				(new Logger("DeckLink", sName)).WriteError(ex);
 			}
 			#endregion
 			return bVideoAdded || bAudioAdded; //??
 		}
-		#region callbacks
-		void IDeckLinkAudioOutputCallback.RenderAudioSamples(int preroll)
+        void IncrementTimecode()
+        {
+            _nCurrentFrame_FF++;
+            if (_nCurrentFrame_FF >= 25)
+            {
+                _nCurrentFrame_FF = 0;
+                _nCurrentFrame_SS++;
+                if (_nCurrentFrame_SS >= 60)
+                {
+                    _nCurrentFrame_SS = 0;
+                    _nCurrentFrame_MM++;
+                    if (_nCurrentFrame_MM >= 60)
+                    {
+                        _nCurrentFrame_MM = 0;
+                        _nCurrentFrame_HH++;
+                        if (_nCurrentFrame_HH >= 24)
+                        {
+                            _nCurrentFrame_HH = 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        #region callbacks
+        void IDeckLinkAudioOutputCallback.RenderAudioSamples(int preroll)
 		{
 			try
 			{
@@ -669,11 +800,11 @@ namespace BTL.Device
 				}
 				_iDLOutput.EndAudioPreroll();
 				_iDLOutput.StartScheduledPlayback(0, Preferences.nFPS, 1.0);
-				(new Logger("DeckLink")).WriteNotice("preroll " + Preferences.nQueueDeviceLength + " frames. start playback");
+				(new Logger("DeckLink", sName)).WriteNotice("preroll " + Preferences.nQueueDeviceLength + " frames. start playback");
 			}
 			catch (Exception ex)
 			{
-				(new Logger("DeckLink")).WriteError(ex);
+				(new Logger("DeckLink", sName)).WriteError(ex);
 			}
 		}
 
@@ -685,18 +816,18 @@ namespace BTL.Device
 				{
 					case _BMDOutputFrameCompletionResult.bmdOutputFrameDisplayedLate:
 						_nFramesLated++;
-						(new Logger("DeckLink")).WriteNotice("frame lated. total:" + _nFramesLated);
+						(new Logger("DeckLink", sName)).WriteNotice("frame lated. total:" + _nFramesLated);
 						break;
 					case _BMDOutputFrameCompletionResult.bmdOutputFrameDropped:
 						_nFramesDropped++;
-						(new Logger("DeckLink")).WriteNotice("frame dropped. total:" + _nFramesDropped);
+						(new Logger("DeckLink", sName)).WriteNotice("frame dropped. total:" + _nFramesDropped);
 						break;
 					case _BMDOutputFrameCompletionResult.bmdOutputFrameFlushed:
 						_nFramesFlushed++;
-						(new Logger("DeckLink")).WriteNotice("frame flushed. total:" + _nFramesFlushed);
+						(new Logger("DeckLink", sName)).WriteNotice("frame flushed. total:" + _nFramesFlushed);
 						break;
 					//default:
-					//    (new Logger("DeckLink")).WriteDebug4("ScheduledFrameCompleted normal");
+					//    (new Logger("DeckLink", sName)).WriteDebug4("ScheduledFrameCompleted normal");
 					//    break;
 				}
 				Frame.Video oFrame;
@@ -706,21 +837,40 @@ namespace BTL.Device
 					oFrame = _ahFramesBuffersBinds.FirstOrDefault(o => o.Value == completedFrame).Key;
 					if (null != oFrame && _aCurrentFramesIDs.ContainsKey(oFrame.nID))
 					{
-						(new Logger("DeckLink")).WriteDebug4("frame " + oFrame.nID + " was passed out " + (nNow - _aCurrentFramesIDs[oFrame.nID]) + " ms");  
+						(new Logger("DeckLink", sName)).WriteDebug4("frame " + oFrame.nID + " was passed out " + (nNow - _aCurrentFramesIDs[oFrame.nID]) + " ms");  
 						_aCurrentFramesIDs.Remove(oFrame.nID);
-					}
+                        if (!oFrame.ahVancDataLine_Bytes.IsNullOrEmpty())
+                        {
+                            IntPtr pData;
+                            IDeckLinkVideoFrameAncillary cVFA;
+                            completedFrame.GetAncillaryData(out cVFA);
+                            if (cVFA != null)
+                            {
+                                foreach (uint nLine in oFrame.ahVancDataLine_Bytes.Keys)
+                                {
+                                    cVFA.GetBufferForVerticalBlankingLine(nLine, out pData);
+                                    VancData.Clear(_aTmpUint);
+                                    VancData.CopyUintArrayToPointer(_aTmpUint, pData, _aTmpUint.Length);
+
+                                    _cBinM.BytesBack(oFrame.ahVancDataLine_Bytes[nLine], 61);
+                                }
+                                oFrame.ahVancDataLine_Bytes = null;
+                                System.Runtime.InteropServices.Marshal.ReleaseComObject(cVFA);
+                            }
+                        }
+                    }
 					else if (0 < oFrame.nID && _cVideoFrameEmpty.nID != oFrame.nID)
-						(new Logger("DeckLink")).WriteDebug("VERY STRANGE - 1   error  [id=" + oFrame.nID + "]");
+						(new Logger("DeckLink", sName)).WriteDebug("VERY STRANGE - 1   error  [id=" + oFrame.nID + "]");
 
 					foreach (long nVFid in _aCurrentFramesIDs.Keys.Where(o => (Preferences.nQueueDeviceLength * 40 + 500) < nNow - _aCurrentFramesIDs[o]))
 					{
-						(new Logger("DeckLink")).WriteDebug2("There are some over timed frames in decklink buffer: \n");
-						(new Logger("DeckLink")).WriteDebug2("\t\t[id=" + nVFid + "][delta=" + _aCurrentFramesIDs[nVFid] + "]\n");
+						(new Logger("DeckLink", sName)).WriteDebug2("There are some over timed frames in decklink buffer: \n");
+						(new Logger("DeckLink", sName)).WriteDebug2("\t\t[id=" + nVFid + "][delta=" + _aCurrentFramesIDs[nVFid] + "]\n");
 					}
 				}
 
 				if (null == oFrame)
-					(new Logger("DeckLink")).WriteWarning("frame is not in _ahFramesBuffersBinds");
+					(new Logger("DeckLink", sName)).WriteWarning("frame is not in _ahFramesBuffersBinds");
 				else
 				{
 					FrameBufferReleased(oFrame);
@@ -728,7 +878,7 @@ namespace BTL.Device
 
 				long nDelta = _cStopWatch.ElapsedMilliseconds - _nLastScTimeComplited;
 				if (1 > nDelta) // 100 < nDelta || 
-					(new Logger("DeckLink")).WriteDebug2("Last ScheduledFrameCompleted was " + nDelta + " ms ago");
+					(new Logger("DeckLink", sName)).WriteDebug2("Last ScheduledFrameCompleted was " + nDelta + " ms ago");
 				_nLastScTimeComplited = _cStopWatch.ElapsedMilliseconds;
 
 				_bNeedToAddFrame = true;
@@ -773,7 +923,7 @@ namespace BTL.Device
 			}
 			catch (Exception ex)
 			{
-				(new Logger("DeckLink")).WriteError(ex);
+				(new Logger("DeckLink", sName)).WriteError(ex);
 			}
 		}
 
@@ -781,13 +931,76 @@ namespace BTL.Device
 
 		void IDeckLinkVideoOutputCallback.ScheduledPlaybackHasStopped()
 		{
-			(new Logger("DeckLink")).WriteNotice("playback stopped");
+			(new Logger("DeckLink", sName)).WriteNotice("playback stopped");
 		}
 
+        string sS = ".";
+        ulong nIndex = 0; 
 		void IDeckLinkInputCallback.VideoInputFrameArrived(IDeckLinkVideoInputFrame iVideoInputFrame, IDeckLinkAudioInputPacket iAudioPacket)
 		{
             try
             {
+                if (iVideoInputFrame == null)
+                {
+                    (new Logger("DeckLink", sName)).WriteError("a null frame arrived");
+                    return;
+                }
+                
+                if (nIndex++ % 1000 == 0)
+                {
+                    if (sS == ".") sS = ""; else sS = ".";
+                    (new Logger("DeckLink", sName)).WriteNotice($"another 1000 frames got.{sS}");
+                }
+
+                if (bLoggingVANCOnInput)
+                {
+                    IDeckLinkTimecode cTC = null;
+                    string sTC = null;
+                    iVideoInputFrame.GetTimecode(_BMDTimecodeFormat.bmdTimecodeRP188LTC, out cTC);
+                    cTC?.GetString(out sTC);
+                    (new Logger("DeckLink", sName)).WriteNotice($"VideoInputFrameArrived: [LTC={sTC}]");
+                    iVideoInputFrame.GetTimecode(_BMDTimecodeFormat.bmdTimecodeRP188VITC1, out cTC);
+                    cTC?.GetString(out sTC);
+                    (new Logger("DeckLink", sName)).WriteNotice($"VideoInputFrameArrived: [VITC={sTC}]");
+                    iVideoInputFrame.GetTimecode(_BMDTimecodeFormat.bmdTimecodeRP188VITC2, out cTC);
+                    cTC?.GetString(out sTC);
+                    (new Logger("DeckLink", sName)).WriteNotice($"VideoInputFrameArrived: [VITC2={sTC}]");
+
+                    IDeckLinkVideoFrameAncillary cVFA;
+                    iVideoInputFrame.GetAncillaryData(out cVFA);
+                    _BMDPixelFormat ePF = cVFA.GetPixelFormat();
+                    _BMDDisplayMode eDM = cVFA.GetDisplayMode();
+
+                    if (ePF != _BMDPixelFormat.bmdFormat10BitYUV)
+                    {
+                        (new Logger("DeckLink", sName)).WriteError($"FORMAT = [{ePF}][{eDM}] can read VANC data only from {_BMDPixelFormat.bmdFormat10BitYUV} pixel format");
+                        (new Logger("DeckLink", sName)).WriteNotice($"Turn off VANC logging");
+                        bLoggingVANCOnInput = false;
+                    }
+
+                    for (uint nN = 1; nN <= 583; nN++)  //for (uint nN = 1; nN <= 20; nN++)   1-20  561-583  for (uint nN = 1; nN <= 583; nN++)   for (uint nN = 1; nN <= 2; nN++)
+                    {
+                        //if (nN == 1) nN = 17;  //for (uint nN = 1; nN <= 2; nN++)
+                        //if (nN == 2) nN = 580; //for (uint nN = 1; nN <= 2; nN++)
+                        if (nN == 21)
+                            nN = 561;
+                        IntPtr pBuf;
+                        try
+                        {
+                            cVFA.GetBufferForVerticalBlankingLine(nN, out pBuf);
+                        }
+                        catch (Exception ex)
+                        {
+                            (new Logger("DeckLink", sName)).WriteError("wrong VANC line " + nN + "  ", ex);
+                            continue;
+                        }
+
+                        VancData.CopyUintArrayFromPointer(pBuf, _aTmpUint, _aTmpUint.Length);
+                        VancData.ReadAndLog(_aTmpUint, null, nN, sName);
+                    }
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(cVFA);
+                }
+
                 if (bAVFrameArrivedAttached)
                 {
                     IDeckLinkVideoFrame iVideoFrame = iVideoInputFrame;
@@ -806,41 +1019,42 @@ namespace BTL.Device
                     {
                         nFramesDroppedVideo++;
                         iVideoFrame = _iVideoFrameLast;
-                        (new Logger("DeckLink")).WriteWarning("video frame dropped");
+                        (new Logger("DeckLink", sName)).WriteWarning("video frame dropped");
                     }
                     if (null != iVideoFrame)
                     {
                         iVideoFrame.GetBytes(out pBytesVideo);
                         if (IntPtr.Zero != pBytesVideo)
                         {
-                            nBytesVideoQty = iVideoFrame.GetRowBytes() * iVideoFrame.GetHeight();
+                            nBytesVideoQty = iVideoFrame.GetRowBytes() * iVideoFrame.GetHeight();  //  or _nVideoBytesQty
                             nFramesVideo++;
                         }
                         else
-                            (new Logger("DeckLink")).WriteWarning("video frame is empty");
+                            (new Logger("DeckLink", sName)).WriteWarning("video frame is empty");
                     }
                     if (null != iAudioPacket)
                     {
                         iAudioPacket.GetBytes(out pBytesAudio);
                         if (IntPtr.Zero != pBytesAudio)
                         {
-                            nBytesAudioQty = iAudioPacket.GetSampleFrameCount() * ((int)_BMDAudioSampleType.bmdAudioSampleType16bitInteger / 8) * 2;
+                            nBytesAudioQty = iAudioPacket.GetSampleFrameCount() * ((int)_eAudioSampleDepth / 8) * _nAudioChannelsQty;  //  or _nAudioBytesQty
                             nFramesAudio++;
                         }
                         else
-                            (new Logger("DeckLink")).WriteWarning("audio frame is empty");
+                            (new Logger("DeckLink", sName)).WriteWarning("audio frame is empty");
                     }
                     else
                     {
                         nFramesDroppedAudio++;
-                        (new Logger("DeckLink")).WriteWarning("audio frame dropped");
+                        (new Logger("DeckLink", sName)).WriteWarning("audio frame dropped");
                     }
                     OnAVFrameArrived(nBytesVideoQty, pBytesVideo, nBytesAudioQty, pBytesAudio);
                 }
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(iVideoInputFrame);
             }
             catch (Exception ex)
             {
-                (new Logger("DeckLink")).WriteError(ex);
+                (new Logger("DeckLink", sName)).WriteError(ex);
             }
         }
 		void IDeckLinkInputCallback.VideoInputFormatChanged(_BMDVideoInputFormatChangedEvents notificationEvents, IDeckLinkDisplayMode newDisplayMode, _BMDDetectedVideoInputFormatFlags detectedSignalFlags)

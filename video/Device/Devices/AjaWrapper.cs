@@ -1284,7 +1284,8 @@ namespace AjaNTV2
             {
                 return delegate ()   //()=> { };
                 {
-                    AjaFunction<Functions.CNTV2DeviceScanner_Dispose>().Invoke(_pDeviceScanner);
+                    if (_pDeviceScanner != IntPtr.Zero)
+                        AjaFunction<Functions.CNTV2DeviceScanner_Dispose>().Invoke(_pDeviceScanner);
                 };
             }
         }

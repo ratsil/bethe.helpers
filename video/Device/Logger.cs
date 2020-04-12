@@ -14,8 +14,9 @@ namespace BTL.Device
                 helpers.Logger.sPreferencesFile = value;
             }
         }
-        public Logger(string sCategory)
-			: base(sCategory)   // "device_main"  , "device[" + System.Diagnostics.Process.GetCurrentProcess().Id + "]"
-        { }
+        public Logger(string sCategory, string sFile)
+            : base(sCategory, sFile == null ? "Device" : sFile)   // "device_main"  , "device[" + System.Diagnostics.Process.GetCurrentProcess().Id + "]"
+        {
+        }
 	}
 }

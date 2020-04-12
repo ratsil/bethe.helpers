@@ -72,10 +72,13 @@ namespace helpers
                         try
                         {
                             cCUDA = new CUDA(true);
-                            cCUDA.CreateContext(nN % 1000); // nober of cuda in prefs (still alwais 0)
+                            cCUDA.CreateContext(nN % 1000); // number of cuda in prefs (still alwais 0)
                         }
                         catch (Exception ex)
                         {
+                            if (ex is CUDAException)
+                                ex = new Exception("CUDA Error:" + ((CUDAException)ex).CUDAError.ToString(), ex);
+
                             throw new Exception("CreateContext(" + nN % 1000 + ") error. Try to change CUDA's card number in prefs", ex);
                         }
                         (new Logger(sS)).WriteDebug("CreateContext(" + nN % 1000 + ") is ok!");

@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Globalization;
 
 using helpers.extensions;
 
@@ -133,6 +135,7 @@ namespace helpers
     {
         private static long _nMaxID = 0;
         public long nID;
+        public bool bNotForReturning;
         public byte[] aBytes;
         public int Length { get { return aBytes?.Length ?? 0; } }
         public Bytes(int nSize)
@@ -214,6 +217,8 @@ namespace helpers
         }
         public void BytesBack(Bytes cBytes, byte nFrom)
         {
+            if (cBytes.bNotForReturning)
+                return;
             if (null == cBytes || null == cBytes.aBytes)
             {
                 (new Logger()).WriteDebug(_sLogPrefix + "error - received NULL bytes! (from=" + nFrom + ")");
@@ -498,6 +503,112 @@ namespace helpers
             else
                 (new Logger()).WriteError("No file. The class not loaded from file [" + sInfoFile + "]");
             return cRetVal;
+        }
+    }
+    public class SubsParsing
+    {
+        public class Sub
+        {
+            public ulong nFrameStart;
+            public ulong nFrameStop;
+            public string sLine1;
+            public string sLine2;
+        }
+        public List<Sub> aSubs;
+        public bool bEnded;
+        public string sFile;
+        public TimeSpan tsTotalShift;
+        private int _nCurrentIndx;
+        public int nCurrentIndx
+        {
+            get
+            {
+                return _nCurrentIndx;
+            }
+        }
+        private ulong _nStart;
+        private int _nFrameDurationMs;
+        public override string ToString()
+        {
+            string sLog = aSubs.IsNullOrEmpty() ? "[subs is empty]" : $"[in={aSubs[0].nFrameStart}][out={aSubs[aSubs.Count - 1].nFrameStop}]";
+            return $"[f={sFile}][shift={tsTotalShift.ToString(@"hh\:mm\:ss\.fff")}][isended={bEnded}][cur_index={_nCurrentIndx}]{sLog}";
+        }
+        public SubsParsing(string sFile, int nFrameDurationMs)
+        {
+            _nFrameDurationMs = nFrameDurationMs;
+            this.sFile = sFile;
+            string[] aText = System.IO.File.ReadAllLines(sFile);
+            CultureInfo cCurrent = Thread.CurrentThread.CurrentCulture;
+            Thread.CurrentThread.CurrentCulture = new CultureInfo("hr-HR"); // to Parse "," in TimeSpan correctly
+            aSubs = new List<Sub>();
+            string[] aTime;
+            string sL1, sL2;
+            for (int i = 0; i < aText.Length; i++)
+            {
+                aTime = Regex.Split(aText[i], @"[\t ]*-->[\t ]*");
+                if (aTime.Length == 2)
+                {
+                    ulong n1 = (ulong)(TimeSpan.Parse(aTime[0]).TotalMilliseconds / nFrameDurationMs + 0.5);
+                    ulong n2 = (ulong)(TimeSpan.Parse(aTime[1]).TotalMilliseconds / nFrameDurationMs + 0.5);
+                    if (++i >= aText.Length) break;
+                    sL1 = aText[i];
+                    if (sL1.IsNullOrEmpty()) break;
+                    if (++i >= aText.Length) break;
+                    sL2 = aText[i];
+                    aSubs.Add(new Sub() { sLine1 = sL1, sLine2 = sL2 == "" ? null : sL2, nFrameStart = n1, nFrameStop = n2 });
+                }
+            }
+            Thread.CurrentThread.CurrentCulture = cCurrent;
+            _nCurrentIndx = int.MaxValue;
+        }
+        public void Prepare(ulong nVideoStartFrame, TimeSpan tsShiftVideo, TimeSpan tsSubsShiftPref)
+        {
+            ulong nShiftTotal;
+            ulong nShiftVideo = (ulong)(tsShiftVideo.TotalMilliseconds / _nFrameDurationMs + 0.5);
+            ulong nShiftPref = (ulong)(tsSubsShiftPref.TotalMilliseconds / _nFrameDurationMs + 0.5);
+            if (aSubs[0].nFrameStart < nShiftVideo)
+            {
+                nShiftTotal = nShiftPref;
+                tsTotalShift = tsSubsShiftPref;
+                (new Logger()).WriteWarning($"subs are already shifted [first sub: fr_start={ aSubs[0].nFrameStart }   text={aSubs[0].sLine1}   file={ sFile }][video_shift={ nShiftVideo }]");
+            }
+            else
+            {
+                nShiftTotal = nShiftVideo + nShiftPref;
+                tsTotalShift = tsShiftVideo + tsSubsShiftPref;
+            }
+            _nStart = nVideoStartFrame - nShiftTotal;
+            _nCurrentIndx = 0;
+            bEnded = false;
+            for (int i = 0; i < aSubs.Count; i++)
+            {
+                aSubs[i].nFrameStart += _nStart;
+                aSubs[i].nFrameStop += _nStart;
+            }
+        }
+        public Sub GetCurrentSub(ulong nFrame)
+        {
+            if (_nCurrentIndx == int.MaxValue)
+                throw new Exception("subs must be prepared before getting");
+            if (_nCurrentIndx >= aSubs.Count)
+            {
+                bEnded = true;
+                return null;
+            }
+
+            while (nFrame >= aSubs[_nCurrentIndx].nFrameStart)
+            {
+                if (nFrame < aSubs[_nCurrentIndx].nFrameStop)
+                    return aSubs[_nCurrentIndx];
+
+                _nCurrentIndx++;
+                if (_nCurrentIndx >= aSubs.Count)
+                {
+                    bEnded = true;
+                    return null;
+                }
+            }
+            return null;
         }
     }
 }

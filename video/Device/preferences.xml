@@ -2,7 +2,7 @@
 <preferences>
 	<device make="aja" target="0" target_channel="0" type="output" debug_folder="/path" >
 		<audio rate="48000" channels="6" bits="32" volume_change="0" />  <!-- aja only uses 48000(,96000) and ch=6,8,12 and 32bits (16 converts to 32 in btl) -->
-		<video format="1080i_5000" pixels="NTV2_FBF_ARGB" >    <!-- declink format= 1080i pal  pixels= bgra      anamorph="true"  aja  "1080i_5000" "NTV2_FBF_ARGB"    -->
+		<video format="1080i_5000" pixels="NTV2_FBF_ARGB" pixels_trg="NTV2_FBF_ARGB" >    <!-- declink format= 1080i pal  pixels= bgra      anamorph="true"  aja  "1080i_5000" "NTV2_FBF_ARGB"    -->
 			<keyer level="255" type="internal" />
 		</video>
 		<queue device="15" pipe="40" gc_interval="50" />

@@ -10,7 +10,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 using SD = System.Drawing;
-using SDI = System.Drawing.Imaging;           // отладка
+using SDI = System.Drawing.Imaging;           // РѕС‚Р»Р°РґРєР°
 using System.Diagnostics;
 
 

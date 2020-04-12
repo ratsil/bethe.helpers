@@ -25,7 +25,11 @@ namespace BTL.Device
 			{
 				return _cInstance._nTargetDevice;
 			}
-		}
+            set
+            {
+                _cInstance._nTargetDevice = value; 
+            }
+        }
         static public byte nTargetChannel
         {
             get
@@ -46,6 +50,10 @@ namespace BTL.Device
 			{
 				return _cInstance._bDeviceInput;
 			}
+            set
+            {
+                _cInstance._bDeviceInput = value;
+            }
 		}
 		static public ushort nFPS
 		{
@@ -208,6 +216,13 @@ namespace BTL.Device
                 return _cInstance._sPixelsFormat;
             }
         }
+        static public string sPixelsFormatTarget
+        {
+            get
+            {
+                return _cInstance._sPixelsFormatTarget;
+            }
+        }
         static public byte nQueueDeviceLength
 		{
 			get
@@ -269,6 +284,7 @@ namespace BTL.Device
         private bool _bAnamorph;
 		private DownStreamKeyer _cDownStreamKeyer;
         private string _sPixelsFormat;
+        private string _sPixelsFormatTarget;
 
         private byte _nQueueDeviceLength;
 		private byte _nQueuePipeLength;
@@ -293,19 +309,8 @@ namespace BTL.Device
             }
             _bDeviceInput = ("input" == cNodeDevice.AttributeValueGet("type"));
 
-			if (!_bDeviceInput)
+            if (!_bDeviceInput)
 			{
-                if (_bAudio = (null != (cNodeChild = cNodeDevice.NodeGet("audio", false))))
-				{
-                    _nAudioSamplesRate = cNodeChild.AttributeGet<uint>("rate");
-                    _nAudioChannelsQty = cNodeChild.AttributeGet<byte>("channels");
-                    _nAudioBitDepth = cNodeChild.AttributeGet<byte>("bits");
-					_nAudioByteDepth = (byte)(_nAudioBitDepth / 8);
-					_nAudioBytesPerSample = (byte)(_nAudioByteDepth * _nAudioChannelsQty);
-                    _nAudioVolumeChangeInDB = cNodeChild.AttributeOrDefaultGet<short>("volume_change", 0);
-                    if (0 != _nAudioVolumeChangeInDB)
-                        _nAudioVolumeChange = (float)Math.Pow(10, (float)_nAudioVolumeChangeInDB / 20);
-                }
                 if (null != (cNodeChild = cNodeDevice.NodeGet("xna", false)))
                 {
                     cXNA = new XNA();
@@ -317,11 +322,23 @@ namespace BTL.Device
                 }
             }
 
+            if (_bAudio = (null != (cNodeChild = cNodeDevice.NodeGet("audio", false))))
+            {
+                _nAudioSamplesRate = cNodeChild.AttributeGet<uint>("rate");
+                _nAudioChannelsQty = cNodeChild.AttributeGet<byte>("channels");
+                _nAudioBitDepth = cNodeChild.AttributeGet<byte>("bits");
+                _nAudioByteDepth = (byte)(_nAudioBitDepth / 8);
+                _nAudioBytesPerSample = (byte)(_nAudioByteDepth * _nAudioChannelsQty);
+                _nAudioVolumeChangeInDB = cNodeChild.AttributeOrDefaultGet<short>("volume_change", 0);
+                if (0 != _nAudioVolumeChangeInDB)
+                    _nAudioVolumeChange = (float)Math.Pow(10, (float)_nAudioVolumeChangeInDB / 20);
+            }
             if (_bVideo = (null != (cNodeChild = cNodeDevice.NodeGet("video", false))))
 			{
                 _sVideoFormat = cNodeChild.AttributeValueGet("format").ToLower();
                 _sPixelsFormat = cNodeChild.AttributeValueGet("pixels").ToLower();
-				_bAnamorph = cNodeChild.AttributeOrDefaultGet<bool>("anamorph", false);
+                _sPixelsFormatTarget = cNodeChild.AttributeValueGet("pixels_trg", false);
+                _bAnamorph = cNodeChild.AttributeOrDefaultGet<bool>("anamorph", false);
 				if (!_bDeviceInput)
 				{
 					_cDownStreamKeyer = null;

@@ -647,6 +647,36 @@ namespace helpers.extensions
             }
             throw new Exception("type is not enum");
         }
+        static public TEnum ToEnumEqualsString<TEnum>(this string sValue, TEnum eDefaultValue, out bool bFound) where TEnum : struct, IConvertible
+        {
+            if (typeof(TEnum).IsEnum)
+            {
+                TEnum eRetVal = eDefaultValue;
+                sValue = sValue.ToLower();
+                bFound = false;
+                if (eRetVal.ToString().ToLower().Equals(sValue))
+                    bFound = true;
+
+                foreach (TEnum ePF in Enum.GetValues(typeof(TEnum)))
+                {
+                    if (ePF.ToString().ToLower().Equals(sValue))
+                    {
+                        if (eRetVal.ToString() != ePF.ToString())
+                        {
+                            if (bFound)
+                            {
+                                bFound = false;
+                                break;
+                            }
+                            eRetVal = ePF;
+                            bFound = true;
+                        }
+                    }
+                }
+                return eRetVal;
+            }
+            throw new Exception("type is not enum");
+        }
 
         static private object Translate(this Enum eValue, Type tEnumTarget)
 		{
@@ -1188,6 +1218,18 @@ namespace helpers.extensions
             return aA.ToEnumerationString("", null, null, bUnique);
         }
 
+        public static string ToHexString(this byte[] aRawData, string sSeparator)
+        {
+            string sRetVal = "";
+            for (int i = 0; i < aRawData.Length; i++)
+            {
+                if (i == aRawData.Length - 1)
+                    sSeparator = "";
+                sRetVal += String.Format("{0:X}" + sSeparator, aRawData[i]);
+            }
+            return sRetVal;
+        }
+
         public static DateTime ModificationCreationDateLast(this sio.FileInfo cFI)
 		{
 			if (cFI.CreationTime > cFI.LastWriteTime)
@@ -1203,6 +1245,81 @@ namespace helpers.extensions
                 ahRetVal.Add(cT, ahDict[cT]);
             return ahRetVal;
         }
+        public static string GetWordInCorrectMaturity(this string sWord, int nQty)
+        {
+            if (sWord.IsNullOrEmpty())
+                return sWord;
+            string sRetVal = sWord.ToLower();
+            switch (sRetVal)
+            {
+                case "секунд":
+                case "минут":
+                case "часов":
+                case "дней":
+                    nQty = Math.Abs(nQty);
+                    string sS = nQty.ToString();
+                    if (99 < nQty)
+                        sS = sS.Substring(sS.Count() - 2, 2);
+                    int n1 = sS.Length > 1 ? int.Parse(sS.Substring(sS.Length - 2, 1)) : 0;
+                    int n2 = int.Parse(sS.Substring(sS.Length - 1, 1));
+                    if (n1 != 1)
+                    {
+                        if (1 < n2 && 5 > n2)
+                            switch (sRetVal)
+                            {
+                                case "часов":
+                                    sRetVal = "часа"; break;
+                                case "дней":
+                                    sRetVal = "дня"; break;
+                                case "минут":
+                                    sRetVal = "минуты"; break;
+                                case "секунд":
+                                    sRetVal = "секунды"; break;
+                            }
+                        else if (1 == n2)
+                            switch (sRetVal)
+                            {
+                                case "часов":
+                                    sRetVal = "час"; break;
+                                case "дней":
+                                    sRetVal = "день"; break;
+                                case "минут":
+                                    sRetVal = "минута"; break;
+                                case "секунд":
+                                    sRetVal = "секунда"; break;
+                            }
+                    }
+                    break;
+                case "seconds":
+                case "minutes":
+                case "hours":
+                case "days":
+                    if (1 == Math.Abs(nQty))
+                        switch (sRetVal)
+                        {
+                            case "seconds":
+                                sRetVal = "second"; break;
+                            case "minutes":
+                                sRetVal = "minute"; break;
+                            case "hours":
+                                sRetVal = "hour"; break;
+                            case "days":
+                                sRetVal = "day"; break;
+                        }
+                    break;
+            }
+
+            if (sRetVal == sWord.ToLower())
+                return sWord;
+            if (sWord == sWord.ToLower())
+                return sRetVal;
+            if (sWord == sWord.ToUpper())
+                return sRetVal.ToUpper();
+            if (sWord == sWord.ToUpperFirstLetterEveryWord(true))
+                return sRetVal.ToUpperFirstLetterEveryWord(true);
+            return sWord;
+        }
+
 #if SILVERLIGHT
         public static TT ParentOfType<TT>(this System.Windows.DependencyObject element) where TT : System.Windows.DependencyObject
         {

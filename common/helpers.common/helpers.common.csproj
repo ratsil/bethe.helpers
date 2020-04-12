@@ -107,12 +107,16 @@
     <Reference Include="System.IO.Compression.FileSystem">
       <HintPath>..\..\..\..\..\..\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5.2\System.IO.Compression.FileSystem.dll</HintPath>
     </Reference>
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Area.cs" />
     <Compile Include="Classes.cs" />
     <Compile Include="CopyFileExtended.cs" />
+    <Compile Include="Data.cs" />
+    <Compile Include="Ebur128.cs" />
     <Compile Include="extensions.cs" />
     <Compile Include="Frame.cs" />
     <Compile Include="IdNamePair.cs" />
